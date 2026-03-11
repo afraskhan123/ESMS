@@ -97,6 +97,9 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
             // Initial alerts load
             loadAlerts();
+
+            // Navigate to Sales tab by default after login
+            navigateTab('sales');
         } else {
             errorDiv.querySelector('span').textContent = result.message;
             errorDiv.classList.remove('hidden');

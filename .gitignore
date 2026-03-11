@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+*.exe
+*.db
+*.sqlite
+data/
+out/

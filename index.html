@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <title>Electronic Solutions & Management Services</title>
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="assets/vendor/fontawesome/css/all.min.css">
+    <style>
+        .page-break {
+            page-break-before: always;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            .printable-report {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ═══════════════════════════════════════════════════════════
+         PRINT PREVIEW TOOLBAR
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="print-preview-toolbar" class="hidden no-print">
+        <div class="print-preview-content">
+            <h2><i class="fas fa-eye"></i> Print Preview</h2>
+            <div class="print-preview-actions">
+                <button class="btn btn-secondary" onclick="cancelPrintPreview()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button class="btn btn-primary" onclick="confirmPrint()">
+                    <i class="fas fa-print"></i> Print Now
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- ═══════════════════════════════════════════════════════════
+         LOGIN SCREEN
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>ESMS</h1>
+                <p>Electronic Solutions & Management Services</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter password" required>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <a href="#" id="forgot-password-link"
+                        style="color: var(--primary); text-decoration: none; font-size: 0.875rem;">Forgot Password?</a>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </form>
+            <div id="login-error" class="alert alert-danger hidden" style="margin-top: 1rem;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN APPLICATION
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>⚡ ESMS</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-tab="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </div>
+                <div class="nav-item" data-tab="inventory">
+                    <i class="fas fa-boxes"></i>
+                    <span>Inventory</span>
+                </div>
+                <div class="nav-item" data-tab="customers">
+                    <i class="fas fa-users"></i>
+                    <span>Customers</span>
+                </div>
+                <div class="nav-item" data-tab="sales">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Sales</span>
+                </div>
+                <div class="nav-item" data-tab="installments">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Installments</span>
+                </div>
+                <div class="nav-item" data-tab="payments">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>Payments</span>
+                </div>
+                <div class="nav-item" data-tab="reports">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Reports</span>
+                </div>
+                <div class="nav-item" data-tab="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </div>
+                <div class="nav-item" data-tab="logout"
+                    style="margin-top: auto; border-top: 1px solid var(--dark-border); padding-top: 1rem;">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-title">
+                    <h1 id="page-title">Dashboard</h1>
+                </div>
+                <div class="header-actions">
+                    <div class="notifications-wrapper">
+                        <div class="alert-badge" id="alert-badge">
+                            <i class="fas fa-bell" style="font-size: 1.25rem;"></i>
+                            <span class="badge-count" id="alert-count">0</span>
+                        </div>
+                        <div class="notification-dropdown" id="notification-dropdown">
+                            <div class="notification-header">
+                                <h4>Notifications</h4>
+                                <div class="notification-actions">
+                                    <span class="mark-read" id="mark-all-read" title="Mark all as read"><i
+                                            class="fas fa-check-double"></i></span>
+                                    <span class="clear-all" id="clear-all-notifications"
+                                        title="Clear all notifications"><i class="fas fa-trash-alt"></i></span>
+                                </div>
+                            </div>
+                            <div class="notification-list" id="notification-list">
+                                <!-- Notifications will be injected here -->
+                                <div class="notification-empty">No new notifications</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="user-info" id="admin-profile-btn" style="cursor: pointer;">
+                        <i class="fas fa-user-circle" style="font-size: 1.5rem;"></i>
+                        <span id="current-user">Admin</span>
+                        <i class="fas fa-cog" style="font-size: 0.8rem; margin-left: 5px; opacity: 0.7;"></i>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Dashboard Tab -->
+                <div id="dashboard-tab" class="tab-content active">
+                    <div class="stats-grid" id="stats-grid">
+                        <!-- Stats will be loaded dynamically -->
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-exclamation-triangle"></i> Active Alerts</h3>
+                        </div>
+                        <div id="alerts-container">
+                            <!-- Alerts will be loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inventory Tab -->
+                <div id="inventory-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-boxes"></i> Product Inventory</h3>
+                            <button class="btn btn-primary" id="add-product-btn">
+                                <i class="fas fa-plus"></i> Add Product
+                            </button>
+                        </div>
+
+                        <div class="toolbar">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" class="form-control" id="product-search"
+                                    placeholder="Search products...">
+                            </div>
+                            <div class="filter-group">
+                                <select class="form-control" id="category-filter">
+                                    <option value="">All Categories</option>
+                                </select>
+                                <button class="btn btn-danger" id="low-stock-filter">
+                                    <i class="fas fa-exclamation-circle"></i> Low Stock
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="products-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Brand</th>
+                                        <th>Purchase Price</th>
+                                        <th>Selling Price</th>
+                                        <th>Stock</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-tbody">
+                                    <!-- Products will be loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers Tab -->
+                <div id="customers-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-users"></i> Customer Management</h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-secondary" onclick="printSpecialList('Customer List')">
+                                    <i class="fas fa-print"></i> Print List
+                                </button>
+                                <button class="btn btn-primary" id="add-customer-btn">
+                                    <i class="fas fa-user-plus"></i> Add Customer
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="toolbar">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" class="form-control" id="customer-search"
+                                    placeholder="Search customers...">
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="customers-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Phone</th>
+                                        <th>Address</th>
+                                        <th>ID Number</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customers-tbody">
+                                    <!-- Customers will be loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sales Tab -->
+                <div id="sales-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-shopping-cart"></i> Create New Sale</h3>
+                        </div>
+
+                        <form id="sale-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="sale-customer" class="required">Customer</label>
+                                    <select class="form-control" id="sale-customer" required>
+                                        <option value="">Select Customer</option>
+                                    </select>
+                                </div>
+                                <div class="form-group hidden" id="walkin-name-group">
+                                    <label for="walkin-name" class="required">Customer Name</label>
+                                    <input type="text" class="form-control" id="walkin-name" placeholder="Enter name">
+                                </div>
+                                <div class="form-group">
+                                    <label for="payment-type" class="required">Payment Type</label>
+                                    <select class="form-control" id="payment-type" required>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Installment">Installment</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="card-header">
+                                <h3>Add Product</h3>
+                            </div>
+                            <div id="sale-item-input-section"
+                                style="padding: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1rem; background: #f8fafc;">
+                                <div class="form-row">
+                                    <div class="form-group" style="flex: 2;">
+                                        <label for="current-sale-product" class="required">Product</label>
+                                        <select class="form-control" id="current-sale-product">
+                                            <option value="">Select Product</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="current-sale-quantity" class="required">Quantity</label>
+                                        <input type="number" class="form-control" id="current-sale-quantity" min="1"
+                                            value="1" oninput="if(this.value !== '' && this.value < 1) this.value = 1;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label id="current-sale-subtotal-label">Subtotal</label>
+                                        <input type="text" class="form-control" id="current-sale-subtotal" readonly
+                                            value="Rs. 0.00" data-custom="false">
+                                    </div>
+                                </div>
+                                <div id="current-sale-stock-error" class="text-danger small mt-1 hidden"><i
+                                        class="fas fa-exclamation-circle"></i> <span></span></div>
+
+                                <div id="installment-details" class="hidden"
+                                    style="margin-top: 1rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;">
+                                    <div class="card-header" style="margin-top: 0; padding-top: 0;">
+                                        <h3 style="font-size: 1.1rem; border: none; padding-bottom: 0;">Installment
+                                            Details
+                                        </h3>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="down-payment" class="required">Down Payment</label>
+                                            <input type="number" class="form-control" id="down-payment" min="0"
+                                                step="0.01"
+                                                oninput="if(this.value !== '' && this.value < 0) this.value = 0;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="installment-duration" class="required">Duration (Months)</label>
+                                            <input type="number" class="form-control" id="installment-duration" min="1"
+                                                max="60"
+                                                oninput="if(this.value !== '' && this.value < 1) this.value = 1;">
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 1rem;">
+                                        <label>Monthly Payment: <strong id="monthly-payment">Rs. 0.00</strong></label>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="installment-start-date" class="required">First Installment Due
+                                                Date</label>
+                                            <input type="date" class="form-control" id="installment-start-date">
+                                        </div>
+                                    </div>
+
+                                    <!-- Guarantor Details -->
+                                    <div style="border-top: 1px solid #e2e8f0; padding-top: 1rem; margin-top: 0.25rem;">
+                                        <h4
+                                            style="font-size: 0.95rem; font-weight: 600; color: #475569; margin-bottom: 0.75rem;">
+                                            <i class="fas fa-user-shield"
+                                                style="margin-right: 0.4rem; color: #3b82f6;"></i>Guarantor Details
+                                        </h4>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="guarantor-name">Guarantor Name</label>
+                                                <input type="text" class="form-control" id="guarantor-name"
+                                                    placeholder="Enter guarantor's full name">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="guarantor-cnic">CNIC / ID Number</label>
+                                                <input type="text" class="form-control" id="guarantor-cnic"
+                                                    placeholder="e.g. 42101-1234567-1">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="guarantor-mobile">Mobile Number</label>
+                                                <input type="text" class="form-control" id="guarantor-mobile"
+                                                    placeholder="e.g. 0300-1234567">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="guarantor-address">Address</label>
+                                                <input type="text" class="form-control" id="guarantor-address"
+                                                    placeholder="Enter guarantor's address">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    style="text-align: right; margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px;">
+                                    <button type="button" class="btn btn-light" id="clear-cart-item-btn">
+                                        <i class="fas fa-times"></i> Clear
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="add-to-cart-btn">
+                                        <i class="fas fa-plus"></i> Add Item
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="card-header">
+                                <h3>Cart Items</h3>
+                            </div>
+                            <div class="table-container" style="margin-bottom: 1rem;">
+                                <table id="sale-cart-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Price</th>
+                                            <th>Qty</th>
+                                            <th>Subtotal</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sale-cart-tbody">
+                                        <tr id="empty-cart-row">
+                                            <td colspan="5" class="text-center text-muted">No items added yet</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="flex-between mt-1 mb-2">
+                                <h3>Total Amount:</h3>
+                                <h2 id="sale-total">Rs. 0.00</h2>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" id="clear-sale-btn">Clear</button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-check"></i> Complete Sale
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card mt-1">
+                        <div class="card-header">
+                            <h3><i class="fas fa-history"></i> Recent Sales</h3>
+                            <button class="btn btn-danger btn-sm" id="clear-history-btn">
+                                <i class="fas fa-trash-alt"></i> Clear History
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Invoice #</th>
+                                        <th>Customer</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Payment Type</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sales-tbody">
+                                    <!-- Sales will be loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Installments Tab -->
+                <div id="installments-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-calendar-alt"></i> Installment Plans</h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <div class="search-box" style="max-width: 280px;">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" class="form-control" id="installment-search"
+                                        placeholder="Search by customer or invoice #...">
+                                </div>
+                                <button class="btn btn-secondary btn-sm"
+                                    onclick="printSpecialList('Installments List')">
+                                    <i class="fas fa-print"></i> Print List
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="toolbar">
+                            <div class="filter-group">
+                                <button class="btn btn-primary btn-sm installment-filter active"
+                                    data-status="">All</button>
+                                <button class="btn btn-success btn-sm installment-filter"
+                                    data-status="Active">Active</button>
+                                <button class="btn btn-warning btn-sm installment-filter"
+                                    data-status="Overdue">Overdue</button>
+                                <button class="btn btn-secondary btn-sm installment-filter"
+                                    data-status="Completed">Completed</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="overflow: visible;">
+                            <table style="table-layout: fixed; width: 100%;">
+                                <colgroup>
+                                    <col style="width: 6%;">
+                                    <col style="width: 20%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: center;">Inv #</th>
+                                        <th>Customer</th>
+                                        <th style="text-align: right;">Total</th>
+                                        <th style="text-align: right;">Paid</th>
+                                        <th style="text-align: right;">Remaining</th>
+                                        <th style="text-align: right;">Monthly</th>
+                                        <th style="text-align: center;">Next Due</th>
+                                        <th style="text-align: center;">Status</th>
+                                        <th style="text-align: center;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="installments-tbody">
+                                    <!-- Installments will be loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payments Tab -->
+                <div id="payments-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-money-bill-wave"></i> Payment Tracking</h3>
+                        </div>
+
+                        <div class="toolbar">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" class="form-control" id="payment-search"
+                                    placeholder="Search customer or invoice #...">
+                            </div>
+                            <div class="filter-group">
+                                <input type="date" class="form-control" id="payment-start-date" title="Start Date">
+                                <span style="align-self: center;">to</span>
+                                <input type="date" class="form-control" id="payment-end-date" title="End Date">
+                                <button class="btn btn-primary" id="payment-filter-btn">
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="payments-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Invoice #</th>
+                                        <th>Customer</th>
+                                        <th>Plan Total</th>
+                                        <th>Amount Paid</th>
+                                        <th>Remaining</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payments-tbody">
+                                    <!-- Payments will be loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="payments-pagination" class="report-pagination hidden">
+                            <!-- Pagination buttons will be loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Tab -->
+                <div id="reports-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-file-alt"></i> Generate Reports</h3>
+                        </div>
+
+                        <!-- Sub-Tabs & Panels Wrapper (hidden when report is shown) -->
+                        <div id="report-tabs-wrapper">
+                            <!-- Sub-Tab Navigation -->
+                            <div class="report-sub-tabs">
+                                <button class="report-sub-tab active" data-report-tab="sales">
+                                    <i class="fas fa-shopping-cart"></i> Sales
+                                </button>
+                                <button class="report-sub-tab" data-report-tab="installments">
+                                    <i class="fas fa-calendar-alt"></i> Installments
+                                </button>
+                                <button class="report-sub-tab" data-report-tab="inventory">
+                                    <i class="fas fa-boxes"></i> Inventory
+                                </button>
+                                <button class="report-sub-tab" data-report-tab="profitloss">
+                                    <i class="fas fa-chart-line"></i> Profit & Loss
+                                </button>
+                            </div>
+
+                            <!-- ═══ Sales Filter Panel ═══ -->
+                            <div class="report-filter-panel active" id="report-panel-sales">
+                                <div class="report-filter-row" style="margin-bottom: 0;">
+                                    <div class="report-date-filter" style="flex-wrap: wrap;">
+                                        <select class="form-control" id="sales-report-type" style="width: auto;">
+                                            <option value="overall">Overall Sales</option>
+                                            <option value="daily">Daily Sales (Today)</option>
+                                            <option value="monthly">Monthly Sales (This Month)</option>
+                                            <option value="custom">Custom Date Range</option>
+                                        </select>
+                                        <div id="sales-custom-dates"
+                                            style="display: none; align-items: center; gap: 0.5rem;">
+                                            <input type="date" class="form-control" id="report-start-date"
+                                                title="Start Date">
+                                            <span class="report-date-separator">to</span>
+                                            <input type="date" class="form-control" id="report-end-date"
+                                                title="End Date">
+                                        </div>
+                                        <button class="btn btn-primary" id="generate-sales-report-btn">
+                                            <i class="fas fa-file-invoice-dollar"></i> Generate Report
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" id="report-clear-btn"
+                                            style="display: none;">
+                                            <i class="fas fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ═══ Installments Filter Panel ═══ -->
+                            <div class="report-filter-panel" id="report-panel-installments">
+                                <div class="report-filter-row" style="margin-bottom: 0;">
+                                    <div class="report-date-filter" style="flex-wrap: wrap;">
+                                        <select class="form-control" id="installments-report-type" style="width: auto;">
+                                            <option value="due">Due Installments</option>
+                                            <option value="overdue">Overdue Payments</option>
+                                        </select>
+                                        <button class="btn btn-primary" id="generate-installments-report-btn">
+                                            <i class="fas fa-clock"></i> Generate Report
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ═══ Inventory Filter Panel ═══ -->
+                            <div class="report-filter-panel" id="report-panel-inventory">
+                                <div class="report-filter-row" style="margin-bottom: 0;">
+                                    <div class="report-date-filter" style="flex-wrap: wrap;">
+                                        <button class="btn btn-primary" id="generate-inventory-report-btn">
+                                            <i class="fas fa-boxes"></i> Generate Inventory Report
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ═══ Profit & Loss Filter Panel ═══ -->
+                            <div class="report-filter-panel" id="report-panel-profitloss">
+                                <div class="report-filter-row" style="margin-bottom: 0;">
+                                    <div class="report-date-filter" style="flex-wrap: wrap;">
+                                        <input type="date" class="form-control" id="profit-start-date"
+                                            title="Start Date">
+                                        <span class="report-date-separator">to</span>
+                                        <input type="date" class="form-control" id="profit-end-date" title="End Date">
+                                        <button class="btn btn-primary" id="generate-profit-report-btn">
+                                            <i class="fas fa-chart-line"></i> Generate Report
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div><!-- /report-tabs-wrapper -->
+
+                        <!-- ═══ Report Output Area ═══ -->
+                        <div id="report-output" class="hidden">
+                            <div class="card-header">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <h3 id="report-title" style="margin: 0;"></h3>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <div class="report-search-box">
+                                        <i class="fas fa-search"></i>
+                                        <input type="text" class="form-control" id="report-search"
+                                            placeholder="Search in report...">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="printSpecialList('Report')">
+                                        <i class="fas fa-print"></i> Print
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="report-content"></div>
+                            <div id="report-pagination" class="report-pagination hidden">
+                                <button class="btn btn-secondary btn-sm" id="report-prev-page">
+                                    <i class="fas fa-chevron-left"></i> Previous
+                                </button>
+                                <span id="report-page-info" class="report-page-info">Page 1 of 1</span>
+                                <button class="btn btn-secondary btn-sm" id="report-next-page">
+                                    Next <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Settings Tab -->
+                <div id="settings-tab" class="tab-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-cog"></i> Application Settings</h3>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <!-- Profile Settings Section -->
+                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0; grid-column: span 2;">
+                                <div class="card-header" style="background: #f8fafc;">
+                                    <h3><i class="fas fa-user-edit"></i> Profile Settings</h3>
+                                </div>
+                                <div class="p-2" style="display: flex; gap: 30px; align-items: center;">
+                                    <div style="text-align: center;">
+                                        <div class="profile-image-container"
+                                            style="width: 100px; height: 100px; border-radius: 50%; overflow: hidden; margin-bottom: 10px; border: 3px solid #e2e8f0; position: relative;">
+                                            <img id="settings-profile-image" src="assets/default-avatar.png"
+                                                alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">
+                                        </div>
+                                        <button class="btn btn-sm btn-secondary"
+                                            onclick="document.getElementById('profile-image-upload').click()">
+                                            <i class="fas fa-camera"></i> Change
+                                        </button>
+                                        <input type="file" id="profile-image-upload" accept="image/*"
+                                            style="display: none;">
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <form id="update-profile-form">
+                                            <div class="form-group">
+                                                <label for="profile-username" class="required">Username</label>
+                                                <input type="text" class="form-control" id="profile-username" required>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Data Management Section -->
+                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
+                                <div class="card-header" style="background: #f8fafc;">
+                                    <h3><i class="fas fa-database"></i> Data Management</h3>
+                                </div>
+                                <div class="p-2">
+                                    <p style="margin-bottom: 15px; color: #64748b;">Manage your application data. CREATE
+                                        BACKUPS REGULARLY.</p>
+                                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                        <button class="btn btn-success" id="export-db-btn" style="flex: 1;">
+                                            <i class="fas fa-file-export"></i> Export Database
+                                        </button>
+                                        <button class="btn btn-warning" id="import-db-btn" style="flex: 1;">
+                                            <i class="fas fa-file-import"></i> Import Database
+                                        </button>
+                                    </div>
+                                    <div class="alert alert-warning" style="font-size: 0.85rem; margin-top: 10px;">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <strong>Warning:</strong> Importing will overwrite all current data and restart
+                                        the app.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Security Section -->
+                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
+                                <div class="card-header" style="background: #f8fafc;">
+                                    <h3><i class="fas fa-key"></i> Security</h3>
+                                </div>
+                                <div class="p-2">
+                                    <form id="change-password-form">
+                                        <div class="form-group">
+                                            <label for="current-password" class="required">Current Password</label>
+                                            <div style="position: relative;">
+                                                <input type="password" class="form-control" id="current-password"
+                                                    placeholder="Enter current password" required
+                                                    style="padding-right: 40px;">
+                                                <span class="password-toggle" data-target="current-password"
+                                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8;">
+                                                    <i class="fas fa-eye"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="new-password" class="required">New Password</label>
+                                            <div style="position: relative;">
+                                                <input type="password" class="form-control" id="new-password"
+                                                    placeholder="Enter new password" required
+                                                    style="padding-right: 40px;">
+                                                <span class="password-toggle" data-target="new-password"
+                                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8;">
+                                                    <i class="fas fa-eye"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="confirm-password" class="required">Confirm New Password</label>
+                                            <div style="position: relative;">
+                                                <input type="password" class="form-control" id="confirm-password"
+                                                    placeholder="Confirm new password" required
+                                                    style="padding-right: 40px;">
+                                                <span class="password-toggle" data-target="confirm-password"
+                                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8;">
+                                                    <i class="fas fa-eye"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style="text-align: right; margin-top: 10px;">
+                                            <button type="submit" class="btn btn-primary">Update Password</button>
+                                        </div>
+                                    </form>
+
+                                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
+
+                                    <h4 style="margin-bottom: 15px; font-size: 1rem;">Recovery Method</h4>
+                                    <form id="update-recovery-code-form">
+                                        <div class="form-group">
+                                            <label for="recovery-current-password" class="required">Current
+                                                Password</label>
+                                            <input type="password" class="form-control" id="recovery-current-password"
+                                                required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="new-recovery-code" class="required">New Recovery Code</label>
+                                            <input type="text" class="form-control" id="new-recovery-code"
+                                                placeholder="Enter new recovery code" required>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <button type="submit" class="btn btn-warning">Update Recovery Code</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         MODALS
+         ═══════════════════════════════════════════════════════════ -->
+
+    <!-- Add/Edit Product Modal -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="product-modal-title">Add Product</h3>
+                <button class="modal-close" onclick="closeModal('product-modal')">&times;</button>
+            </div>
+            <form id="product-form" autocomplete="off">
+                <input type="hidden" id="product-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="product-name" class="required">Product Name</label>
+                        <input type="text" class="form-control" id="product-name" placeholder="Enter product name"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-category" class="required">Category</label>
+                        <div class="custom-dropdown" id="category-dropdown">
+                            <div class="custom-dropdown-select" id="category-display">
+                                <input type="text" id="category-input" placeholder="Select or type category"
+                                    autocomplete="off" required>
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                            <div class="custom-dropdown-list" id="category-list">
+                                <!-- Categories will be populated here by JS -->
+                                <div class="custom-dropdown-item custom-dropdown-add-new" id="category-add-new">
+                                    <span>+ Add New Category</span>
+                                </div>
+                                <div class="custom-dropdown-input-area" id="category-input-area">
+                                    <div class="flex">
+                                        <input type="text" class="custom-dropdown-item-input" id="category-new-input"
+                                            placeholder="New Category...">
+                                        <button type="button" class="btn btn-primary btn-sm"
+                                            id="category-new-save">Add</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="product-category">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="product-brand" class="required">Brand</label>
+                        <div class="custom-dropdown" id="brand-dropdown">
+                            <div class="custom-dropdown-select" id="brand-display">
+                                <input type="text" id="brand-input" placeholder="Select or type brand"
+                                    autocomplete="off" required>
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                            <div class="custom-dropdown-list" id="brand-list">
+                                <!-- Brands will be populated here by JS -->
+                                <div class="custom-dropdown-item custom-dropdown-add-new" id="brand-add-new">
+                                    <span>+ Add New Brand</span>
+                                </div>
+                                <div class="custom-dropdown-input-area" id="brand-input-area">
+                                    <div class="flex">
+                                        <input type="text" class="custom-dropdown-item-input" id="brand-new-input"
+                                            placeholder="New Brand...">
+                                        <button type="button" class="btn btn-primary btn-sm"
+                                            id="brand-new-save">Add</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="product-brand">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-supplier">Supplier</label>
+                        <input type="text" class="form-control" id="product-supplier" placeholder="Enter supplier name">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="product-purchase-price" class="required">Purchase Price</label>
+                        <input type="number" class="form-control" id="product-purchase-price" min="0" step="0.01"
+                            placeholder="0.00" oninput="if(this.value !== '' && this.value < 0) this.value = 0;"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-selling-price" class="required">Selling Price</label>
+                        <input type="number" class="form-control" id="product-selling-price" min="0" step="0.01"
+                            placeholder="0.00" oninput="if(this.value !== '' && this.value < 0) this.value = 0;"
+                            required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="product-stock" class="required">Stock Quantity</label>
+                        <input type="number" class="form-control" id="product-stock" min="0" placeholder="0"
+                            oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="product-min-stock">Minimum Stock Level</label>
+                        <input type="number" class="form-control" id="product-min-stock" min="0" value="5"
+                            placeholder="5" oninput="if(this.value !== '' && this.value < 0) this.value = 0;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="product-warranty">Warranty Period</label>
+                    <input type="text" class="form-control" id="product-warranty" placeholder="e.g., 1 Year">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="closeModal('product-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit Customer Modal -->
+    <div id="customer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="customer-modal-title">Add Customer</h3>
+                <button class="modal-close" onclick="closeModal('customer-modal')">&times;</button>
+            </div>
+            <form id="customer-form" autocomplete="off">
+                <input type="hidden" id="customer-id">
+
+                <div class="form-group" style="text-align: center; margin-bottom: 20px;">
+                    <div class="profile-image-container"
+                        style="width: 100px; height: 100px; border-radius: 50%; overflow: hidden; margin: 0 auto 10px auto; border: 3px solid #e2e8f0; position: relative;">
+                        <img id="customer-image-preview" src="assets/default-avatar.png" alt="Customer Photo"
+                            style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary"
+                        onclick="document.getElementById('customer-image-upload').click()">
+                        <i class="fas fa-camera"></i> Upload Photo
+                    </button>
+                    <input type="file" id="customer-image-upload" accept="image/*" style="display: none;">
+                </div>
+
+                <div class="form-group">
+                    <label for="customer-name" class="required">Full Name</label>
+                    <input type="text" class="form-control" id="customer-name" placeholder="Enter full name" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customer-phone" class="required">Phone</label>
+                        <input type="tel" class="form-control" id="customer-phone" placeholder="Enter phone number"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-id-number">CNIC / ID Number</label>
+                        <input type="text" class="form-control" id="customer-id-number"
+                            placeholder="Enter CNIC / ID Number">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="customer-address">Address</label>
+                    <textarea class="form-control" id="customer-address" rows="2"
+                        placeholder="Enter full address"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="customer-email">Email</label>
+                    <input type="email" class="form-control" id="customer-email"
+                        placeholder="Enter email address (optional)">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="closeModal('customer-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customer Detail Modal -->
+    <div id="customer-detail-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Customer Details</h3>
+                <button class="modal-close" onclick="closeModal('customer-detail-modal')">&times;</button>
+            </div>
+            <div id="customer-detail-content" style="text-align: center;">
+                <div class="profile-image-container"
+                    style="width: 150px; height: 150px; border-radius: 50%; overflow: hidden; margin: 0 auto 20px auto; border: 4px solid var(--primary-light); box-shadow: var(--shadow-md);">
+                    <img id="detail-customer-image" src="assets/default-avatar.png" alt="Customer Photo"
+                        style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <h2 id="detail-customer-name" style="margin-bottom: 5px; color: var(--text-primary);"></h2>
+                <p id="detail-customer-phone"
+                    style="color: var(--primary); font-weight: 600; margin-bottom: 20px; font-size: 1.1rem;"></p>
+
+                <div
+                    style="text-align: left; display: grid; gap: 15px; background: var(--light-bg); padding: 20px; border-radius: var(--radius-lg); border: 1px solid var(--dark-border);">
+                    <div>
+                        <label
+                            style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">CNIC
+                            / ID Number</label>
+                        <div id="detail-customer-id" style="font-weight: 500;">-</div>
+                    </div>
+                    <div>
+                        <label
+                            style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Email
+                            Address</label>
+                        <div id="detail-customer-email" style="font-weight: 500;">-</div>
+                    </div>
+                    <div>
+                        <label
+                            style="display: block; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Address</label>
+                        <div id="detail-customer-address" style="font-weight: 500; line-height: 1.4;">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('customer-detail-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Record Payment</h3>
+                <button class="modal-close" onclick="closeModal('payment-modal')">&times;</button>
+            </div>
+            <div id="payment-installment-info"></div>
+            <form id="payment-form">
+                <input type="hidden" id="payment-installment-id">
+                <div class="form-group">
+                    <label for="payment-amount" class="required">Payment Amount</label>
+                    <input type="number" class="form-control" id="payment-amount" min="0" step="0.01"
+                        oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="closeModal('payment-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-success">Record Payment</button>
+                </div>
+            </form>
+            <div class="card-header mt-1">
+                <h3>Payment History</h3>
+            </div>
+            <div id="payment-history-container"></div>
+        </div>
+    </div>
+
+    <!-- Edit Installment Modal -->
+    <div id="edit-installment-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Installment Plan</h3>
+                <button class="modal-close" onclick="closeModal('edit-installment-modal')">&times;</button>
+            </div>
+            <form id="edit-installment-form">
+                <input type="hidden" id="edit-installment-id">
+                <div class="form-group">
+                    <label>Customer (Read-only)</label>
+                    <input type="text" class="form-control" id="edit-installment-customer" readonly disabled>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-installment-total" class="required">Total Amount</label>
+                        <input type="number" class="form-control" id="edit-installment-total" min="0" step="0.01"
+                            oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-installment-remaining" class="required">Remaining Balance</label>
+                        <input type="number" class="form-control" id="edit-installment-remaining" min="0" step="0.01"
+                            oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit-installment-monthly" class="required">Monthly Installment</label>
+                        <input type="number" class="form-control" id="edit-installment-monthly" min="0" step="0.01"
+                            oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-installment-due-date" class="required">Next Due Date</label>
+                        <input type="date" class="form-control" id="edit-installment-due-date" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-installment-status" class="required">Status</label>
+                    <select class="form-control" id="edit-installment-status" required>
+                        <option value="Active">Active</option>
+                        <option value="Overdue">Overdue</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="closeModal('edit-installment-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="invoice-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h3 style="margin: 0;">Invoice Details</h3>
+                    <button class="btn btn-info btn-sm" onclick="downloadInvoicePDF()">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </button>
+                </div>
+                <div
+                    style="display: flex; gap: 10px; align-items: center; justify-content: center; margin-right: auto; margin-left: 20px;">
+                    <label style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                        <input type="radio" name="invoice-language" value="en" onchange="toggleInvoiceLanguage('en')"
+                            checked> English
+                    </label>
+                    <label
+                        style="margin: 0; cursor: pointer; display: flex; align-items: center; gap: 5px; font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif; font-size: 1.1rem;">
+                        <input type="radio" name="invoice-language" value="ur" onchange="toggleInvoiceLanguage('ur')">
+                        اردو
+                    </label>
+                </div>
+                <button class="modal-close" onclick="closeModal('invoice-modal')">&times;</button>
+            </div>
+            <div id="invoice-content"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Close</button>
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recovery Modal -->
+    <div id="recovery-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Reset Password</h3>
+                <button class="modal-close" onclick="closeModal('recovery-modal')">&times;</button>
+            </div>
+            <form id="recovery-form">
+                <div class="form-group">
+                    <label for="recovery-code" class="required">Recovery Code</label>
+                    <input type="text" class="form-control" id="recovery-code" placeholder="Enter recovery code"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label for="recovery-new-password" class="required">New Password</label>
+                    <input type="password" class="form-control" id="recovery-new-password"
+                        placeholder="Enter new password" required>
+                </div>
+                <div class="form-group">
+                    <label for="recovery-confirm-password" class="required">Confirm Password</label>
+                    <input type="password" class="form-control" id="recovery-confirm-password"
+                        placeholder="Confirm new password" required>
+                </div>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button type="submit" class="btn btn-primary">Reset Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Date Range Modal for Reports -->
+    <div id="date-range-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Select Date Range</h3>
+                <button class="modal-close" onclick="closeModal('date-range-modal')">&times;</button>
+            </div>
+            <form id="date-range-form">
+                <input type="hidden" id="date-range-report-type">
+                <div class="form-group">
+                    <label for="date-range-start" class="required">Start Date</label>
+                    <input type="date" class="form-control" id="date-range-start" required>
+                </div>
+                <div class="form-group">
+                    <label for="date-range-end" class="required">End Date</label>
+                    <input type="date" class="form-control" id="date-range-end" required>
+                </div>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Return Modal -->
+    <div id="return-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Process Product Return</h3>
+                <button class="modal-close" onclick="closeModal('return-modal')">&times;</button>
+            </div>
+            <div id="return-modal-info"
+                style="margin-bottom: 20px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <input type="hidden" id="return-sale-id">
+                <input type="hidden" id="return-sale-payment-type">
+                <input type="hidden" id="return-sale-remaining-balance">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div><strong>Customer:</strong> <span id="return-sale-customer"></span></div>
+                    <div><strong>Date:</strong> <span id="return-sale-date"></span></div>
+                    <div><strong>Total Amount:</strong> <span id="return-sale-total"></span></div>
+                    <div><strong>Payment Method:</strong> <span id="return-sale-method" class="badge"></span></div>
+                </div>
+            </div>
+            <div class="table-container">
+                <div id="return-items-container" style="padding: 10px;">
+                    <!-- Items will be loaded here -->
+                </div>
+            </div>
+            <div id="return-refund-calc"
+                style="display: none; margin-top: 20px; padding: 15px; background: #eef2f5; border-radius: 8px; border-left: 4px solid var(--primary);">
+                <h4 style="margin-top: 0; margin-bottom: 10px;">Refund Calculation</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div><strong>Total Refund Value:</strong> <span id="return-calc-total">Rs. 0</span></div>
+                    <div id="return-calc-deduction-row" style="display: none;"><strong>Deduct from Balance:</strong>
+                        <span id="return-calc-deduction" style="color: var(--secondary);">Rs. 0</span>
+                    </div>
+                    <div><strong>Cash to Customer:</strong> <span id="return-calc-cash"
+                            style="color: var(--success); font-weight: bold; font-size: 1.1em;">Rs. 0</span></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('return-modal')">Close</button>
+                <button class="btn btn-danger" id="process-return-btn">
+                    <i class="fas fa-check"></i> Process Return
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Global Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="font-size: 3rem; color: var(--danger); margin-bottom: 10px;">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h3 id="confirm-modal-title" style="margin-bottom: 15px;">Are you sure?</h3>
+            <p id="confirm-modal-message" style="margin-bottom: 25px; color: var(--dark-text); opacity: 0.8;"></p>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+                <button class="btn btn-secondary" id="confirm-modal-cancel">Cancel</button>
+                <button class="btn btn-danger" id="confirm-modal-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-container"></div>
+    <script src="renderer.js"></script>
+</body>
+
+</html>

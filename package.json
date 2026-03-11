@@ -1,0 +1,58 @@
+{
+  "name": "esms",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "start:prod": "cd dist/win-unpacked && start ESMS.exe",
+    "build": "electron-builder -w",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.esms.app",
+    "productName": "ESMS",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/logo.jpg"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ESMS"
+    },
+    "files": [
+      "**/*",
+      "build/**/*",
+      "!node_modules/**/obj",
+      "!node_modules/**/test",
+      "!src/**/__tests__",
+      "!esms.db"
+    ],
+    "extraResources": [
+      {
+        "from": "esms.db",
+        "to": "esms.db"
+      }
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^26.7.0",
+    "electron-rebuild": "^3.2.9"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fortawesome/fontawesome-free": "^7.2.0",
+    "sqlite3": "^5.1.7"
+  }
+}

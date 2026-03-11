@@ -169,7 +169,7 @@ ipcMain.handle('update-product', async (event, product) => {
 
         dbModule.db.run(
             `UPDATE products SET name = ?, category = ?, brand = ?, purchase_price = ?, selling_price = ?, 
-             stock_qty = ?, min_stock_level = ?, supplier_name = ?, warranty_period = ? WHERE product_id = ?`,
+             stock_qty = ?, min_stock_level = ?, supplier_name = ?, warranty_period = ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ?`,
             [name, category, brand, purchase_price, selling_price, stock_qty, min_stock_level, supplier_name, warranty_period, product_id],
             (err) => {
                 if (err) {
@@ -616,7 +616,7 @@ ipcMain.handle('create-sale', async (event, saleData) => {
 
                                 // Update product stock with VALIDATION
                                 dbModule.db.run(
-                                    'UPDATE products SET stock_qty = stock_qty - ? WHERE product_id = ? AND stock_qty >= ?',
+                                    'UPDATE products SET stock_qty = stock_qty - ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ? AND stock_qty >= ?',
                                     [item.quantity, item.product_id, item.quantity],
                                     function (err) {
                                         if (err) {
@@ -808,7 +808,7 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
 
                         // 3. Update products stock
                         await new Promise((res, rej) => {
-                            dbModule.db.run('UPDATE products SET stock_qty = stock_qty + ? WHERE product_id = ?',
+                            dbModule.db.run('UPDATE products SET stock_qty = stock_qty + ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ?',
                                 [returnQty, item.product_id], (err) => err ? rej(err) : res());
                         });
                     }
@@ -844,6 +844,16 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
                             dbModule.db.run('UPDATE installments SET total_amount = ?, remaining_balance = ?, status = ? WHERE installment_id = ?',
                                 [newTotal, newRemaining, newStatus, installment.installment_id], (err) => err ? rej(err) : res());
                         });
+
+                        if (cashRefundAmount > 0) {
+                            await new Promise((res, rej) => {
+                                dbModule.db.run(
+                                    'INSERT INTO installment_payments (installment_id, amount_paid, remaining_balance_after) VALUES (?, ?, ?)',
+                                    [installment.installment_id, -cashRefundAmount, newRemaining],
+                                    (err) => err ? rej(err) : res()
+                                );
+                            });
+                        }
 
                         responseMessage = `Return processed. Rs. ${deductedFromBalance.toFixed(2)} deducted from balance. Rs. ${cashRefundAmount.toFixed(2)} to refund in cash.`;
                     } else {
@@ -1065,7 +1075,7 @@ ipcMain.handle('get-overdue-installments', async () => {
 
 ipcMain.handle('record-installment-payment', async (event, paymentData) => {
     return new Promise((resolve, reject) => {
-        const { installment_id, amount_paid } = paymentData;
+        const { installment_id, amount_paid, next_due_date } = paymentData;
 
         if (amount_paid < 0) {
             return reject({ success: false, message: 'Payment amount cannot be negative' });
@@ -1089,10 +1099,11 @@ ipcMain.handle('record-installment-payment', async (event, paymentData) => {
                 const new_balance = installment.remaining_balance - amount_paid;
                 const new_status = new_balance <= 0 ? 'Completed' : 'Active';
 
-                // Calculate next due date (30 days from now)
-                const nextDueDate = new Date();
-                nextDueDate.setDate(nextDueDate.getDate() + 30);
-                const next_due_date = nextDueDate.toISOString().split('T')[0];
+                // Ensure next due date is provided
+                if (!next_due_date && new_status === 'Active') {
+                    dbModule.db.run('ROLLBACK');
+                    return reject({ success: false, message: 'Next due date is required' });
+                }
 
                 // Record payment
                 dbModule.db.run(

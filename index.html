@@ -219,6 +219,7 @@
                                         <th>Purchase Price</th>
                                         <th>Selling Price</th>
                                         <th>Stock</th>
+                                        <th>Last Updated</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1077,6 +1078,10 @@
                     <label for="payment-amount" class="required">Payment Amount</label>
                     <input type="number" class="form-control" id="payment-amount" min="0" step="0.01"
                         oninput="if(this.value !== '' && this.value < 0) this.value = 0;" required>
+                </div>
+                <div class="form-group">
+                    <label for="payment-next-due" class="required">Next Due Date</label>
+                    <input type="date" class="form-control" id="payment-next-due" required>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary"

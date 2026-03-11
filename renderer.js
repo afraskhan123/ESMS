@@ -397,7 +397,7 @@ function renderProductsTable(products) {
     const tbody = document.getElementById('products-tbody');
 
     if (products.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No products found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No products found</td></tr>';
         return;
     }
 
@@ -417,6 +417,7 @@ function renderProductsTable(products) {
                 ${product.stock_qty}
                 ${isLowStock ? '<i class="fas fa-exclamation-triangle"></i>' : ''}
             </td>
+            <td>${formatDate(product.last_updated || product.date_added)}</td>
             <td class="table-actions">
                 <button class="btn btn-sm btn-primary" onclick="editProduct(${product.product_id})">
                     <i class="fas fa-edit"></i>
@@ -1167,9 +1168,8 @@ document.getElementById('payment-type').addEventListener('change', (e) => {
     const isInstallment = e.target.value === 'Installment';
     if (isInstallment) {
         installmentDetails.classList.remove('hidden');
-        // Pre-fill the date picker with today + 30 days as a convenient default
+        // Pre-fill the date picker with today as a convenient default
         const defaultDate = new Date();
-        defaultDate.setDate(defaultDate.getDate() + 30);
         document.getElementById('installment-start-date').value = defaultDate.toISOString().split('T')[0];
     } else {
         installmentDetails.classList.add('hidden');
@@ -2281,6 +2281,11 @@ async function recordPayment(installmentId) {
     document.getElementById('payment-installment-id').value = installmentId;
     document.getElementById('payment-amount').value = installment.monthly_amount;
 
+    // Set default next due date to today + 30 days
+    const nextDueDate = new Date();
+    nextDueDate.setDate(nextDueDate.getDate() + 30);
+    document.getElementById('payment-next-due').value = nextDueDate.toISOString().split('T')[0];
+
     const infoHTML = `
         <div class="card" style="margin-bottom: 1rem; background: rgba(59, 130, 246, 0.1);">
             <p><strong>Customer:</strong> ${installment.customer_name}</p>
@@ -2495,6 +2500,7 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
 
     const installmentId = parseInt(document.getElementById('payment-installment-id').value);
     const amountPaid = parseFloat(document.getElementById('payment-amount').value);
+    const nextDueDate = document.getElementById('payment-next-due').value;
 
     if (amountPaid < 0) {
         showNotification('error', 'Payment amount cannot be negative');
@@ -2509,7 +2515,11 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
     }
 
     try {
-        const result = await window.api.recordInstallmentPayment({ installment_id: installmentId, amount_paid: amountPaid });
+        const result = await window.api.recordInstallmentPayment({ 
+            installment_id: installmentId, 
+            amount_paid: amountPaid,
+            next_due_date: nextDueDate
+        });
         if (result.success) {
             showNotification('success', result.message);
             closeModal('payment-modal');

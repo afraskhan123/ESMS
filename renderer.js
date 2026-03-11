@@ -99,7 +99,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
             loadAlerts();
 
             // Navigate to Sales tab by default after login
-            navigateTab('sales');
+            const salesNavItem = document.querySelector('.nav-item[data-tab="sales"]');
+            if (salesNavItem) salesNavItem.click();
         } else {
             errorDiv.querySelector('span').textContent = result.message;
             errorDiv.classList.remove('hidden');

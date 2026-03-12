@@ -126,10 +126,15 @@ async function createTables() {
         min_stock_level INTEGER DEFAULT 5,
         supplier_name TEXT,
         warranty_period TEXT,
-        date_added DATETIME DEFAULT CURRENT_TIMESTAMP
+        date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-
+    // Migration: add last_updated to existing products tables that don't have it
+    const productCols = await dbAll("PRAGMA table_info(products)");
+    if (!productCols.some(c => c.name === 'last_updated')) {
+        await dbRun("ALTER TABLE products ADD COLUMN last_updated DATETIME DEFAULT CURRENT_TIMESTAMP");
+    }
 
     // 3. Customers Table
     await dbRun(`CREATE TABLE IF NOT EXISTS customers (

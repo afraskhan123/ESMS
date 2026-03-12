@@ -141,7 +141,7 @@ ipcMain.handle('add-product', async (event, product) => {
         const { name, category, brand, purchase_price, selling_price, stock_qty, min_stock_level, supplier_name, warranty_period } = product;
 
         if (purchase_price < 0 || selling_price < 0 || stock_qty < 0 || min_stock_level < 0) {
-            return reject({ success: false, message: 'Product values cannot be negative' });
+            return resolve({ success: false, message: 'Product values cannot be negative' });
         }
 
         dbModule.db.run(
@@ -150,7 +150,7 @@ ipcMain.handle('add-product', async (event, product) => {
             [name, category, brand, purchase_price, selling_price, stock_qty, min_stock_level, supplier_name, warranty_period],
             function (err) {
                 if (err) {
-                    reject({ success: false, message: err.message });
+                    resolve({ success: false, message: err.message });
                 } else {
                     resolve({ success: true, message: 'Product added successfully', product_id: this.lastID });
                 }
@@ -164,19 +164,25 @@ ipcMain.handle('update-product', async (event, product) => {
         const { product_id, name, category, brand, purchase_price, selling_price, stock_qty, min_stock_level, supplier_name, warranty_period } = product;
 
         if (purchase_price < 0 || selling_price < 0 || stock_qty < 0 || min_stock_level < 0) {
-            return reject({ success: false, message: 'Product values cannot be negative' });
+            return resolve({ success: false, message: 'Product values cannot be negative' });
         }
 
+        // Core update without last_updated (safe for legacy databases missing the column)
         dbModule.db.run(
-            `UPDATE products SET name = ?, category = ?, brand = ?, purchase_price = ?, selling_price = ?, 
-             stock_qty = ?, min_stock_level = ?, supplier_name = ?, warranty_period = ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ?`,
+            `UPDATE products SET name = ?, category = ?, brand = ?, purchase_price = ?, selling_price = ?,
+             stock_qty = ?, min_stock_level = ?, supplier_name = ?, warranty_period = ? WHERE product_id = ?`,
             [name, category, brand, purchase_price, selling_price, stock_qty, min_stock_level, supplier_name, warranty_period, product_id],
             (err) => {
                 if (err) {
-                    reject({ success: false, message: err.message });
-                } else {
-                    resolve({ success: true, message: 'Product updated successfully' });
+                    return resolve({ success: false, message: err.message });
                 }
+                // Try to update last_updated separately; silently ignore if column doesn't exist yet
+                dbModule.db.run(
+                    'UPDATE products SET last_updated = CURRENT_TIMESTAMP WHERE product_id = ?',
+                    [product_id],
+                    () => { /* ignore error – column added by migration on next restart */ }
+                );
+                resolve({ success: true, message: 'Product updated successfully' });
             }
         );
     });

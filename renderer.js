@@ -30,6 +30,21 @@ function debounce(func, wait) {
     };
 }
 
+// Utility: Print preview for invoices
+window.previewInvoice = function () {
+    window._printOriginalTitle = document.title;
+    document.title = "Invoice preview"; // Or just keep it generic
+
+    document.body.classList.add('printing-invoice');
+
+    // Show the preview toolbar
+    const toolbar = document.getElementById('print-preview-toolbar');
+    if (toolbar) toolbar.classList.remove('hidden');
+
+    // Scroll to top to see preview properly
+    window.scrollTo(0, 0);
+};
+
 // Utility: Print list by temporarily adding printing-list class
 window._printOriginalTitle = '';
 
@@ -50,6 +65,7 @@ window.printSpecialList = function (title = '') {
 
 window.cancelPrintPreview = function () {
     document.body.classList.remove('printing-list');
+    document.body.classList.remove('printing-invoice');
 
     const toolbar = document.getElementById('print-preview-toolbar');
     if (toolbar) toolbar.classList.add('hidden');

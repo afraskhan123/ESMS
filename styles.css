@@ -1,4 +1,4 @@
-﻿@import url('assets/vendor/inter/300.css');
+@import url('assets/vendor/inter/300.css');
 @import url('assets/vendor/inter/400.css');
 @import url('assets/vendor/inter/500.css');
 @import url('assets/vendor/inter/600.css');
@@ -2310,6 +2310,65 @@ tbody td {
 @media screen {
     body.printing-list {
         padding-top: 70px !important;
+    }
+
+    /* Print Preview for Invoices On-Screen */
+    html:has(body.printing-invoice) {
+        overflow: auto !important;
+    }
+    body.printing-invoice {
+        background: #525659 !important; /* Dark PDF-like background */
+        padding-top: 70px !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow: auto !important;
+    }
+    body.printing-invoice > *:not(#invoice-modal):not(#print-preview-toolbar) {
+        display: none !important;
+    }
+    
+    body.printing-invoice #invoice-modal {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        height: auto !important;
+        background: transparent !important;
+        padding: 20px 0 40px 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        z-index: 1040;
+    }
+    
+    body.printing-invoice #invoice-modal .modal-content {
+        display: block !important;
+        position: static !important;
+        margin: 0 auto !important;
+        width: 210mm !important; /* A4 width */
+        max-width: 95% !important;
+        min-height: 297mm !important; /* A4 height */
+        height: auto !important;
+        max-height: none !important;
+        background: white !important;
+        border: 1px solid #000 !important;
+        border-radius: 4px !important; /* Less rounded for paper look */
+        padding: 30px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+        overflow: visible !important;
+    }
+
+    body.printing-invoice #invoice-modal .modal-header {
+        border-bottom: 2px solid #000 !important;
+        margin-bottom: 20px !important;
+        padding-bottom: 10px !important;
+    }
+    
+    /* Hide UI controls inside modal preview */
+    body.printing-invoice #invoice-modal .modal-header .btn,
+    body.printing-invoice #invoice-modal .modal-header div:has(label[style*="cursor: pointer"]),
+    body.printing-invoice #invoice-modal .modal-header div:has(input[type="radio"]),
+    body.printing-invoice #invoice-modal .modal-close,
+    body.printing-invoice #invoice-modal .modal-footer {
+        display: none !important;
     }
 }
 

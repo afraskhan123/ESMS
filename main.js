@@ -554,19 +554,25 @@ ipcMain.handle('get-customer-history', async (event, customer_id) => {
 
 ipcMain.handle('create-sale', async (event, saleData) => {
     return new Promise((resolve, reject) => {
-        const { customer_id, walkin_name, items, payment_type, installment_data } = saleData;
-        const total_amount = items.reduce((sum, item) => sum + item.subtotal, 0);
+        try {
+            const { customer_id, walkin_name, items, payment_type, installment_data } = saleData;
+            
+            if (!items || !Array.isArray(items)) {
+                return resolve({ success: false, message: 'Invalid items provided' });
+            }
 
-        if (total_amount < 0) {
-            return reject({ success: false, message: 'Total amount cannot be negative' });
-        }
+            const total_amount = items.reduce((sum, item) => sum + item.subtotal, 0);
+
+            if (total_amount < 0) {
+                return resolve({ success: false, message: 'Total amount cannot be negative' });
+            }
 
         if (installment_data) {
             if (installment_data.down_payment < 0) {
-                return reject({ success: false, message: 'Down payment cannot be negative' });
+                return resolve({ success: false, message: 'Down payment cannot be negative' });
             }
             if (installment_data.down_payment > total_amount) {
-                return reject({ success: false, message: 'Down payment cannot be greater than total amount' });
+                return resolve({ success: false, message: 'Down payment cannot be greater than total amount' });
             }
         }
 
@@ -580,7 +586,7 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                 function (err) {
                     if (err) {
                         dbModule.db.run('ROLLBACK');
-                        return reject({ success: false, message: err.message });
+                        return resolve({ success: false, message: err.message });
                     }
 
                     const sale_id = this.lastID;
@@ -609,21 +615,21 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                     if (!errorOccurred) {
                                         errorOccurred = true;
                                         dbModule.db.run('ROLLBACK');
-                                        reject({ success: false, message: err.message });
+                                        resolve({ success: false, message: err.message });
                                     }
                                     return;
                                 }
 
                                 // Update product stock with VALIDATION
                                 dbModule.db.run(
-                                    'UPDATE products SET stock_qty = stock_qty - ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ? AND stock_qty >= ?',
+                                    'UPDATE products SET stock_qty = stock_qty - ? WHERE product_id = ? AND stock_qty >= ?',
                                     [item.quantity, item.product_id, item.quantity],
                                     function (err) {
                                         if (err) {
                                             if (!errorOccurred) {
                                                 errorOccurred = true;
                                                 dbModule.db.run('ROLLBACK');
-                                                reject({ success: false, message: err.message });
+                                                resolve({ success: false, message: err.message });
                                             }
                                             return;
                                         }
@@ -632,7 +638,7 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                             if (!errorOccurred) {
                                                 errorOccurred = true;
                                                 dbModule.db.run('ROLLBACK');
-                                                reject({ success: false, message: `Insufficient stock for product: ${item.product_name}` });
+                                                resolve({ success: false, message: `Insufficient stock for product: ${item.product_name}` });
                                             }
                                             return;
                                         }
@@ -660,13 +666,13 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                 (err) => {
                                     if (err) {
                                         dbModule.db.run('ROLLBACK');
-                                        return reject({ success: false, message: err.message });
+                                        return resolve({ success: false, message: err.message });
                                     }
 
                                     dbModule.db.run('COMMIT', (err) => {
                                         if (err) {
                                             dbModule.db.run('ROLLBACK');
-                                            return reject({ success: false, message: err.message });
+                                            return resolve({ success: false, message: err.message });
                                         }
                                         resolve({ success: true, message: 'Sale created successfully', sale_id });
                                     });
@@ -676,7 +682,7 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                             dbModule.db.run('COMMIT', (err) => {
                                 if (err) {
                                     dbModule.db.run('ROLLBACK');
-                                    return reject({ success: false, message: err.message });
+                                    return resolve({ success: false, message: err.message });
                                 }
                                 resolve({ success: true, message: 'Sale created successfully', sale_id });
                             });
@@ -688,6 +694,9 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                 }
             );
         });
+        } catch (error) {
+            return resolve({ success: false, message: error.message || 'An unknown error occurred during sale creation' });
+        }
     });
 });
 
@@ -808,7 +817,7 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
 
                         // 3. Update products stock
                         await new Promise((res, rej) => {
-                            dbModule.db.run('UPDATE products SET stock_qty = stock_qty + ?, last_updated = CURRENT_TIMESTAMP WHERE product_id = ?',
+                            dbModule.db.run('UPDATE products SET stock_qty = stock_qty + ? WHERE product_id = ?',
                                 [returnQty, item.product_id], (err) => err ? rej(err) : res());
                         });
                     }

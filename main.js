@@ -1470,7 +1470,8 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
 
         const salesQuery = `
             SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
-            (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
+            (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
+            (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.customer_id
             LEFT JOIN installments i ON s.sale_id = i.sale_id
@@ -1490,7 +1491,8 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
                     'Installment Payment' as payment_type,
                     COALESCE(c.full_name, s.walkin_name) as customer_name,
                     0 as return_count,
-                    ip.amount_paid as down_payment
+                    ip.amount_paid as down_payment,
+                    (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM installment_payments ip
                 JOIN installments i ON ip.installment_id = i.installment_id
                 JOIN sales s ON i.sale_id = s.sale_id
@@ -1518,7 +1520,8 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
 
         const salesQuery = `
             SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
-            (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
+            (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
+            (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.customer_id
             LEFT JOIN installments i ON s.sale_id = i.sale_id
@@ -1538,7 +1541,8 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
                     'Installment Payment' as payment_type,
                     COALESCE(c.full_name, s.walkin_name) as customer_name,
                     0 as return_count,
-                    ip.amount_paid as down_payment
+                    ip.amount_paid as down_payment,
+                    (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM installment_payments ip
                 JOIN installments i ON ip.installment_id = i.installment_id
                 JOIN sales s ON i.sale_id = s.sale_id
@@ -1571,7 +1575,8 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
 
             const salesQuery = `
                 SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
-                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
+                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
+                (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM sales s
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 LEFT JOIN installments i ON s.sale_id = i.sale_id
@@ -1593,7 +1598,8 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                         'Installment Payment' as payment_type,
                         COALESCE(c.full_name, s.walkin_name) as customer_name,
                         0 as return_count,
-                        ip.amount_paid as down_payment
+                        ip.amount_paid as down_payment,
+                        (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                     FROM installment_payments ip
                     JOIN installments i ON ip.installment_id = i.installment_id
                     JOIN sales s ON i.sale_id = s.sale_id

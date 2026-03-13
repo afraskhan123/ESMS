@@ -2808,25 +2808,53 @@ async function generateDailyReport(date) {
                             <thead>
                                 <tr>
                                     <th>Inv #</th>
-                                    <th>Customer</th>
+                                    <th>Product</th>
                                     <th class="text-center">Type</th>
                                     <th class="text-right">Amount</th>
                                     <th class="text-center">Invoice</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${sales.map(s => {
-                const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
-                let badgeClass = 'report-badge-primary';
-                if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
-                if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
-                return `
+                                ${(() => {
+                    const groupedSales = groupByKey(sales, 'customer_name');
+                    return Object.keys(groupedSales).sort().map(customerName => {
+                        const customerSales = groupedSales[customerName];
+                        
+                        // Sort so Installment comes before Installment Payment for the same date
+                        customerSales.sort((a, b) => {
+                            if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                            if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
+                            if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
+                            const dateA = new Date(a.sale_date).getTime();
+                            const dateB = new Date(b.sale_date).getTime();
+                            return dateA - dateB;
+                        });
+
+                        const customerTotal = customerSales.reduce((sum, s) => {
+                            const amt = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                            return sum + amt;
+                        }, 0);
+
+                        let groupHtml = `
+                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="5" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    </tr>`;
+
+                        groupHtml += customerSales.map(s => {
+                            const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                            let badgeClass = 'report-badge-primary';
+                            if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
+                            if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
+                            
+                            const prodText = s.product_names ? s.product_names : (s.payment_type === 'Installment Payment' ? 'Installment Payment' : 'N/A');
+
+                            return `
                                     <tr>
                                         <td style="font-weight: 600;">
                                             #${s.sale_id}
                                             ${s.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${s.sale_id})" style="font-size: 0.5rem; padding: 1px 3px; margin-left: 2px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}
                                         </td>
-                                        <td>${s.customer_name}</td>
+                                        <td style="color: #64748b; font-size: 0.9em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${prodText}">↳ ${prodText}</td>
                                         <td class="text-center"><span class="report-badge ${badgeClass}">${s.payment_type}</span></td>
                                         <td class="text-right" style="font-weight: 600;">Rs. ${formatCurrency(displayAmount)}</td>
                                         <td class="text-center">
@@ -2837,12 +2865,23 @@ async function generateDailyReport(date) {
                                         </td>
                                     </tr>
                                     `;
-            }).join('')}
+                        }).join('');
+
+                        groupHtml += `
+                                    <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="3" class="text-right" style="font-weight: bold; color: #64748b; font-size: 0.85em; vertical-align: middle;">Subtotal for ${customerName}:</td>
+                                        <td class="text-right" style="font-weight: bold; color: var(--success); font-size: 1.05em; border-top: 1px solid #e2e8f0;">Rs. ${formatCurrency(customerTotal)}</td>
+                                        <td></td>
+                                    </tr>`;
+
+                        return groupHtml;
+                    }).join('');
+                })()}
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <th colspan="4" class="text-right">Total Sales Revenue:</th>
-                                    <th class="text-right" style="color: var(--success);">Rs. ${formatCurrency(total)}</th>
+                                    <th colspan="3" class="text-left" style="padding-left: 15px;">Total Sales Revenue: <span style="color: var(--success); margin-left: 10px; font-size: 1.1em;">Rs. ${formatCurrency(total)}</span></th>
+                                    <th colspan="2"></th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -2902,26 +2941,54 @@ async function generateMonthlyReport() {
                                 <tr>
                                     <th>Inv #</th>
                                     <th>Date</th>
-                                    <th>Customer</th>
+                                    <th>Product</th>
                                     <th class="text-center">Type</th>
                                     <th class="text-right">Amount</th>
                                     <th class="text-center">Invoice</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${sales.map(s => {
-                const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
-                let badgeClass = 'report-badge-primary';
-                if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
-                if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
-                return `
+                                ${(() => {
+                    const groupedSales = groupByKey(sales, 'customer_name');
+                    return Object.keys(groupedSales).sort().map(customerName => {
+                        const customerSales = groupedSales[customerName];
+                        
+                        // Sort so Installment comes before Installment Payment for the same date
+                        customerSales.sort((a, b) => {
+                            if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                            if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
+                            if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
+                            const dateA = new Date(a.sale_date).getTime();
+                            const dateB = new Date(b.sale_date).getTime();
+                            return dateA - dateB;
+                        });
+
+                        const customerTotal = customerSales.reduce((sum, s) => {
+                            const amt = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                            return sum + amt;
+                        }, 0);
+
+                        let groupHtml = `
+                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="6" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    </tr>`;
+
+                        groupHtml += customerSales.map(s => {
+                            const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                            let badgeClass = 'report-badge-primary';
+                            if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
+                            if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
+                            
+                            const prodText = s.product_names ? s.product_names : (s.payment_type === 'Installment Payment' ? 'Installment Payment' : 'N/A');
+
+                            return `
                                     <tr>
                                         <td style="font-weight: 600;">
                                             #${s.sale_id}
                                             ${s.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${s.sale_id})" style="font-size: 0.5rem; padding: 1px 3px; margin-left: 2px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}
                                         </td>
                                         <td>${formatDate(s.sale_date)}</td>
-                                        <td>${s.customer_name}</td>
+                                        <td style="color: #64748b; font-size: 0.9em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${prodText}">↳ ${prodText}</td>
                                         <td class="text-center"><span class="report-badge ${badgeClass}">${s.payment_type}</span></td>
                                         <td class="text-right" style="font-weight: 600;">Rs. ${formatCurrency(displayAmount)}</td>
                                         <td class="text-center">
@@ -2932,12 +2999,23 @@ async function generateMonthlyReport() {
                                         </td>
                                     </tr>
                                 `;
-            }).join('')}
+                        }).join('');
+                        
+                        groupHtml += `
+                                    <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="4" class="text-right" style="font-weight: bold; color: #64748b; font-size: 0.85em; vertical-align: middle;">Subtotal for ${customerName}:</td>
+                                        <td class="text-right" style="font-weight: bold; color: var(--success); font-size: 1.05em; border-top: 1px solid #e2e8f0;">Rs. ${formatCurrency(customerTotal)}</td>
+                                        <td></td>
+                                    </tr>`;
+
+                        return groupHtml;
+                    }).join('');
+                })()}
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <th colspan="5" class="text-right">Total Monthly Revenue:</th>
-                                    <th class="text-right" style="color: var(--success);">Rs. ${formatCurrency(total)}</th>
+                                    <th colspan="4" class="text-left" style="padding-left: 15px;">Total Monthly Revenue: <span style="color: var(--success); margin-left: 10px; font-size: 1.1em;">Rs. ${formatCurrency(total)}</span></th>
+                                    <th colspan="2"></th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -3001,19 +3079,32 @@ async function generateInstallmentReport() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${installments.map(i => {
-                let badgeClass = 'report-badge-secondary';
-                if (i.status === 'Active') badgeClass = 'report-badge-success';
-                else if (i.status === 'Overdue') badgeClass = 'report-badge-danger';
-                else if (i.status === 'Completed') badgeClass = 'report-badge-primary';
+                                ${(() => {
+                    const groupedInstallments = groupByKey(installments, 'customer_name');
+                    return Object.keys(groupedInstallments).sort().map(customerName => {
+                        const customerInstalls = groupedInstallments[customerName];
+                        const customerRemaining = customerInstalls.reduce((sum, i) => sum + i.remaining_balance, 0);
 
-                return `
+                        let groupHtml = `
+                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="3" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName} <span style="font-size: 0.8em; font-weight: normal; color: #64748b;">(Phone: ${customerInstalls[0].phone || '-'})</span></td>
+                                        <td class="text-right" style="font-weight: bold; color: var(--warning);"><span style="font-size: 0.8rem; color: #64748b; margin-right: 5px;">Remaining:</span>Rs. ${formatCurrency(customerRemaining)}</td>
+                                        <td colspan="2"></td>
+                                    </tr>`;
+
+                        groupHtml += customerInstalls.map(i => {
+                            let badgeClass = 'report-badge-secondary';
+                            if (i.status === 'Active') badgeClass = 'report-badge-success';
+                            else if (i.status === 'Overdue') badgeClass = 'report-badge-danger';
+                            else if (i.status === 'Completed') badgeClass = 'report-badge-primary';
+
+                            return `
                                     <tr>
-                                        <td style="font-weight: 600;">
-                                            ${i.customer_name}
+                                        <td style="font-weight: 600; padding-left: 20px;">
+                                            Inv #${i.sale_id}
                                             ${i.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${i.sale_id})" style="font-size: 0.6rem; padding: 2px 4px; margin-left: 5px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}
                                         </td>
-                                        <td>${i.phone}</td>
+                                        <td style="color: #64748b; font-style: italic; font-size: 0.9em;">↳ Plan Detail</td>
                                         <td class="text-right">Rs. ${formatCurrency(i.total_amount)}</td>
                                         <td class="text-right" style="font-weight: 600; color: var(--warning);">Rs. ${formatCurrency(i.remaining_balance)}</td>
                                         <td class="text-center">${formatDate(i.next_due_date)}</td>
@@ -3025,7 +3116,10 @@ async function generateInstallmentReport() {
                                         </td>
                                     </tr>
                                 `;
-            }).join('')}
+                        }).join('');
+                        return groupHtml;
+                    }).join('');
+                })()}
                             </tbody>
                         </table>
                     </div>
@@ -3167,23 +3261,38 @@ async function generateInventoryReport() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${products.map(p => {
-                const isLowStock = p.stock_qty <= p.min_stock_level;
-                const trStyle = isLowStock ? 'background-color: #fffbfa;' : '';
-                const stockColor = isLowStock ? 'color: var(--danger); font-weight: bold;' : '';
+                                ${(() => {
+                    const groupedProducts = groupByKey(products, 'category');
+                    return Object.keys(groupedProducts).sort().map(category => {
+                        const items = groupedProducts[category];
+                        // Sort items alphabetically within category
+                        items.sort((a, b) => a.name.localeCompare(b.name));
 
-                return `
-                                        <tr style="${trStyle}">
-                                            <td style="font-weight: 600;">${p.name}
-                                                ${isLowStock ? '<span class="report-badge report-badge-danger" style="margin-left:8px; font-size:0.6rem;">Low Stock</span>' : ''}
-                                            </td>
-                                            <td>${p.category || '-'}</td>
-                                            <td>${p.brand || '-'}</td>
-                                            <td class="text-right" style="${stockColor}">${p.stock_qty}</td>
-                                            <td class="text-right">Rs. ${formatCurrency(p.purchase_price * p.stock_qty)}</td>
-                                        </tr>
-                                    `;
-            }).join('')}
+                        let groupHtml = `
+                                        <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1;">
+                                            <td colspan="5" style="font-weight: bold; color: var(--primary);"><i class="fas fa-layer-group" style="margin-right: 8px;"></i>Category: ${category || 'Uncategorized'}</td>
+                                        </tr>`;
+
+                        groupHtml += items.map(p => {
+                            const isLowStock = p.stock_qty <= p.min_stock_level;
+                            const trStyle = isLowStock ? 'background-color: #fffbfa;' : '';
+                            const stockColor = isLowStock ? 'color: var(--danger); font-weight: bold;' : '';
+
+                            return `
+                                            <tr style="${trStyle}">
+                                                <td style="font-weight: 600; padding-left: 20px;">${p.name}
+                                                    ${isLowStock ? '<span class="report-badge report-badge-danger" style="margin-left:8px; font-size:0.6rem;">Low Stock</span>' : ''}
+                                                </td>
+                                                <td style="color: #64748b; font-style: italic; font-size: 0.9em;">↳ Product</td>
+                                                <td>${p.brand || '-'}</td>
+                                                <td class="text-right" style="${stockColor}">${p.stock_qty}</td>
+                                                <td class="text-right">Rs. ${formatCurrency(p.purchase_price * p.stock_qty)}</td>
+                                            </tr>
+                                        `;
+                        }).join('');
+                        return groupHtml;
+                    }).join('');
+                })()}
                             </tbody>
                         </table>
                     </div>
@@ -3494,26 +3603,54 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
                                 <tr>
                                     <th>Inv #</th>
                                     <th>Date</th>
-                                    <th>Customer</th>
+                                    <th>Product</th>
                                     <th class="text-center">Type</th>
                                     <th class="text-right">Amount</th>
                                     <th class="text-center">Invoice</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                ${sales.length === 0 ? '<tr><td colspan="6" class="text-center text-muted" style="padding: 2rem;">No sales found in this date range</td></tr>' : sales.map(s => {
-            const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
-            let badgeClass = 'report-badge-primary';
-            if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
-            if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
-            return `
+                                ${sales.length === 0 ? '<tr><td colspan="6" class="text-center text-muted" style="padding: 2rem;">No sales found in this date range</td></tr>' : (() => {
+                const groupedSales = groupByKey(sales, 'customer_name');
+                return Object.keys(groupedSales).sort().map(customerName => {
+                    const customerSales = groupedSales[customerName];
+                    
+                    // Sort so Installment comes before Installment Payment for the same date
+                    customerSales.sort((a, b) => {
+                        if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                        if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
+                        if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
+                        const dateA = new Date(a.sale_date).getTime();
+                        const dateB = new Date(b.sale_date).getTime();
+                        return dateA - dateB;
+                    });
+
+                    const customerTotal = customerSales.reduce((sum, s) => {
+                        const amt = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                        return sum + amt;
+                    }, 0);
+
+                    let groupHtml = `
+                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="6" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    </tr>`;
+
+                    groupHtml += customerSales.map(s => {
+                        const displayAmount = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
+                        let badgeClass = 'report-badge-primary';
+                        if (s.payment_type === 'Cash') badgeClass = 'report-badge-success';
+                        if (s.payment_type === 'Installment Payment') badgeClass = 'report-badge-info';
+                        
+                        const prodText = s.product_names ? s.product_names : (s.payment_type === 'Installment Payment' ? 'Installment Payment' : 'N/A');
+
+                        return `
                                     <tr>
                                         <td style="font-weight: 600;">
                                             #${s.sale_id}
                                             ${s.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${s.sale_id})" style="font-size: 0.5rem; padding: 1px 3px; margin-left: 2px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}
                                         </td>
                                         <td>${formatDate(s.sale_date)}</td>
-                                        <td>${s.customer_name}</td>
+                                        <td style="color: #64748b; font-size: 0.9em; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${prodText}">↳ ${prodText}</td>
                                         <td class="text-center"><span class="report-badge ${badgeClass}">${s.payment_type}</span></td>
                                         <td class="text-right" style="font-weight: 600;">Rs. ${formatCurrency(displayAmount)}</td>
                                         <td class="text-center">
@@ -3524,13 +3661,24 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
                                         </td>
                                     </tr>
                                 `;
-        }).join('')}
+                    }).join('');
+
+                    groupHtml += `
+                                    <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="4" class="text-right" style="font-weight: bold; color: #64748b; font-size: 0.85em; vertical-align: middle;">Subtotal for ${customerName}:</td>
+                                        <td class="text-right" style="font-weight: bold; color: var(--success); font-size: 1.05em; border-top: 1px solid #e2e8f0;">Rs. ${formatCurrency(customerTotal)}</td>
+                                        <td></td>
+                                    </tr>`;
+
+                    return groupHtml;
+                }).join('');
+            })()}
                             </tbody>
                             ${sales.length > 0 ? `
                             <tfoot>
                                 <tr>
-                                    <th colspan="5" class="text-right">Total Revenue:</th>
-                                    <th class="text-right" style="color: var(--success);">Rs. ${formatCurrency(total)}</th>
+                                    <th colspan="4" class="text-left" style="padding-left: 15px;">Total Revenue: <span style="color: var(--success); margin-left: 10px; font-size: 1.1em;">Rs. ${formatCurrency(total)}</span></th>
+                                    <th colspan="2"></th>
                                 </tr>
                             </tfoot>
                             ` : ''}
@@ -3548,6 +3696,14 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
 
 // ═══════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
+
+function groupByKey(array, key) {
+    return array.reduce((result, currentValue) => {
+        const groupValue = currentValue[key] || 'Unknown';
+        (result[groupValue] = result[groupValue] || []).push(currentValue);
+        return result;
+    }, {});
+}
 // ═══════════════════════════════════════════════════════════
 
 function openModal(modalId, focusId = null) {

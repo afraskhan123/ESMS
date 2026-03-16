@@ -156,6 +156,15 @@ async function createTables() {
         await dbRun("ALTER TABLE customers ADD COLUMN image_path TEXT");
     }
 
+    // Migration: ensure id_number is unique where not null
+    try {
+        await dbRun("CREATE UNIQUE INDEX idx_customers_id_number ON customers(id_number) WHERE id_number IS NOT NULL AND id_number != ''");
+    } catch (e) {
+        if (!e.message.includes('already exists')) {
+            console.warn('Could not create unique index on id_number, likely due to existing duplicates:', e.message);
+        }
+    }
+
     // 4. Sales Table
     await dbRun(`CREATE TABLE IF NOT EXISTS sales (
         sale_id INTEGER PRIMARY KEY AUTOINCREMENT,

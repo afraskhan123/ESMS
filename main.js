@@ -393,73 +393,105 @@ ipcMain.handle('get-all-customers', async () => {
 ipcMain.handle('add-customer', async (event, customer) => {
     return new Promise((resolve, reject) => {
         let imagePath = null;
-        if (customer.imageData) {
-            try {
-                const assetsDir = path.join(app.getPath('userData'), 'assets', 'customers');
-                if (!fs.existsSync(assetsDir)) {
-                    fs.mkdirSync(assetsDir, { recursive: true });
-                }
-                const fileName = `customer_${Date.now()}.png`;
-                const filePath = path.join(assetsDir, fileName);
-                const base64Data = customer.imageData.replace(/^data:image\/\w+;base64,/, "");
-                fs.writeFileSync(filePath, base64Data, 'base64');
-                imagePath = filePath;
-            } catch (e) {
-                console.error('Error saving customer image:', e);
-            }
+        const { fullName, phone, idNumber, address, email, imageData } = customer;
+
+        // Manual uniqueness check for id_number (Ignore soft-deleted records)
+        if (idNumber && idNumber.trim() !== '') {
+            dbModule.db.get('SELECT customer_id FROM customers WHERE id_number = ? AND is_deleted = 0', [idNumber], (err, row) => {
+                if (err) return resolve({ success: false, message: 'Database error: ' + err.message });
+                if (row) return resolve({ success: false, message: 'Customer CNIC already exists' });
+                
+                proceedWithInsert();
+            });
+        } else {
+            proceedWithInsert();
         }
 
-        const query = 'INSERT INTO customers (full_name, phone, id_number, address, email, image_path) VALUES (?, ?, ?, ?, ?, ?)';
-        dbModule.db.run(query, [
-            customer.fullName,
-            customer.phone,
-            customer.idNumber,
-            customer.address,
-            customer.email,
-            imagePath
-        ], function (err) {
-            if (err) {
-                reject({ success: false, message: err.message });
-            } else {
-                resolve({ success: true, message: 'Customer added successfully', customer_id: this.lastID });
+        function proceedWithInsert() {
+            let imagePathResult = null;
+            if (imageData) {
+                try {
+                    const assetsDir = path.join(app.getPath('userData'), 'assets', 'customers');
+                    if (!fs.existsSync(assetsDir)) {
+                        fs.mkdirSync(assetsDir, { recursive: true });
+                    }
+                    const fileName = `customer_${Date.now()}.png`;
+                    const filePath = path.join(assetsDir, fileName);
+                    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+                    fs.writeFileSync(filePath, base64Data, 'base64');
+                    imagePathResult = filePath;
+                } catch (e) {
+                    console.error('Error saving customer image:', e);
+                }
             }
-        });
+
+            const query = 'INSERT INTO customers (full_name, phone, id_number, address, email, image_path) VALUES (?, ?, ?, ?, ?, ?)';
+            dbModule.db.run(query, [
+                fullName,
+                phone,
+                idNumber,
+                address,
+                email,
+                imagePathResult
+            ], function (err) {
+                if (err) {
+                    resolve({ success: false, message: err.message });
+                } else {
+                    resolve({ success: true, message: 'Customer added successfully', customer_id: this.lastID });
+                }
+            });
+        }
     });
 });
 
 ipcMain.handle('update-customer', async (event, customer) => {
     return new Promise((resolve, reject) => {
         let { customer_id, fullName, phone, address, idNumber, email, imageData, imagePath } = customer;
-        let finalImagePath = imagePath; // maintain existing path if no new data
 
-        if (imageData) {
-            try {
-                const assetsDir = path.join(app.getPath('userData'), 'assets', 'customers');
-                if (!fs.existsSync(assetsDir)) {
-                    fs.mkdirSync(assetsDir, { recursive: true });
-                }
-                const fileName = `customer_${Date.now()}.png`;
-                const filePath = path.join(assetsDir, fileName);
-                const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
-                fs.writeFileSync(filePath, base64Data, 'base64');
-                finalImagePath = filePath;
-            } catch (e) {
-                console.error('Error updating customer image:', e);
-            }
+        // Manual uniqueness check for id_number (Ignore soft-deleted records)
+        if (idNumber && idNumber.trim() !== '') {
+            dbModule.db.get('SELECT customer_id FROM customers WHERE id_number = ? AND customer_id != ? AND is_deleted = 0', [idNumber, customer_id], (err, row) => {
+                if (err) return resolve({ success: false, message: 'Database error: ' + err.message });
+                if (row) return resolve({ success: false, message: 'Customer CNIC already exists' });
+                
+                proceedWithUpdate();
+            });
+        } else {
+            proceedWithUpdate();
         }
 
-        const query = 'UPDATE customers SET full_name = ?, phone = ?, address = ?, id_number = ?, email = ?, image_path = ? WHERE customer_id = ?';
-        dbModule.db.run(
-            query,
-            [fullName, phone, address, idNumber, email, finalImagePath, customer_id],
-            function (err) {
-                if (err) {
-                    reject({ success: false, message: err.message });
-                } else {
-                    resolve({ success: true, message: 'Customer updated successfully' });
+        function proceedWithUpdate() {
+            let finalImagePath = imagePath; // maintain existing path if no new data
+
+            if (imageData) {
+                try {
+                    const assetsDir = path.join(app.getPath('userData'), 'assets', 'customers');
+                    if (!fs.existsSync(assetsDir)) {
+                        fs.mkdirSync(assetsDir, { recursive: true });
+                    }
+                    const fileName = `customer_${Date.now()}.png`;
+                    const filePath = path.join(assetsDir, fileName);
+                    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
+                    fs.writeFileSync(filePath, base64Data, 'base64');
+                    finalImagePath = filePath;
+                } catch (e) {
+                    console.error('Error updating customer image:', e);
                 }
             }
-        );
+
+            const query = 'UPDATE customers SET full_name = ?, phone = ?, address = ?, id_number = ?, email = ?, image_path = ? WHERE customer_id = ?';
+            dbModule.db.run(
+                query,
+                [fullName, phone, address, idNumber, email, finalImagePath, customer_id],
+                function (err) {
+                    if (err) {
+                        resolve({ success: false, message: err.message });
+                    } else {
+                        resolve({ success: true, message: 'Customer updated successfully' });
+                    }
+                }
+            );
+        }
     });
 });
 
@@ -998,52 +1030,67 @@ ipcMain.handle('get-monthly-sales', async () => {
 // ═══════════════════════════════════════════════════════════
 
 ipcMain.handle('get-all-installments', async (event, filters = {}) => {
-    return new Promise((resolve, reject) => {
-        let query = `
-            SELECT i.*, c.full_name as customer_name, s.sale_date,
-            (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
-            FROM installments i
-            JOIN sales s ON i.sale_id = s.sale_id
-            LEFT JOIN customers c ON s.customer_id = c.customer_id
-            WHERE s.is_deleted = 0
-        `;
-        const params = [];
+    try {
+        // First, update status based on next_due_date for all relevant installments
+        // Using DATE('now', 'localtime') to match how alerts/stats are calculated
+        await new Promise((resolve, reject) => {
+            dbModule.db.serialize(() => {
+                // Active becomes Overdue
+                dbModule.db.run(`
+                    UPDATE installments 
+                    SET status = 'Overdue' 
+                    WHERE status = 'Active' AND DATE(next_due_date) < DATE('now', 'localtime')
+                `, (err) => { if (err) reject(err); });
 
-        if (filters.status) {
-            query += ' AND i.status = ?';
-            params.push(filters.status);
-        }
-
-        query += ' ORDER BY i.installment_id DESC';
-
-        dbModule.db.all(query, params, (err, rows) => {
-            if (err) {
-                reject({ success: false, message: err.message });
-            } else {
-                // Update overdue status
-                // Update overdue status - Ensure strict date comparison
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                rows.forEach(row => {
-                    const dueDate = new Date(row.next_due_date);
-                    dueDate.setHours(0, 0, 0, 0);
-
-                    // Case 1: Active becomes Overdue
-                    if (row.status === 'Active' && dueDate < today) {
-                        dbModule.db.run('UPDATE installments SET status = ? WHERE installment_id = ?', ['Overdue', row.installment_id]);
-                        row.status = 'Overdue';
-                    }
-                    // Case 2: Overdue becomes Active (if date was extended)
-                    else if (row.status === 'Overdue' && dueDate >= today) {
-                        dbModule.db.run('UPDATE installments SET status = ? WHERE installment_id = ?', ['Active', row.installment_id]);
-                        row.status = 'Active';
-                    }
+                // Overdue becomes Active (if date was extended)
+                dbModule.db.run(`
+                    UPDATE installments 
+                    SET status = 'Active' 
+                    WHERE status = 'Overdue' AND DATE(next_due_date) >= DATE('now', 'localtime')
+                `, (err) => {
+                    if (err) reject(err);
+                    else resolve();
                 });
-                resolve({ success: true, installments: rows });
-            }
+            });
         });
-    });
+
+        // Now fetch filtered results
+        return new Promise((resolve, reject) => {
+            let query = `
+                SELECT i.*, c.full_name as customer_name, c.id_number, s.sale_date,
+                (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names,
+                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
+                FROM installments i
+                JOIN sales s ON i.sale_id = s.sale_id
+                LEFT JOIN customers c ON s.customer_id = c.customer_id
+                WHERE s.is_deleted = 0
+            `;
+            const params = [];
+
+            if (filters.status === 'Overdue') {
+                // Return items explicitly marked Overdue OR logically past due
+                query += " AND (i.status = 'Overdue' OR (i.status = 'Active' AND DATE(i.next_due_date) < DATE('now', 'localtime')))";
+            } else if (filters.status === 'Active') {
+                // Return items that are Active AND NOT yet past due
+                query += " AND i.status = 'Active' AND DATE(i.next_due_date) >= DATE('now', 'localtime')";
+            } else if (filters.status) {
+                query += ' AND i.status = ?';
+                params.push(filters.status);
+            }
+
+            query += ' ORDER BY i.installment_id DESC';
+
+            dbModule.db.all(query, params, (err, rows) => {
+                if (err) {
+                    reject({ success: false, message: err.message });
+                } else {
+                    resolve({ success: true, installments: rows });
+                }
+            });
+        });
+    } catch (error) {
+        return { success: false, message: error.message };
+    }
 });
 
 ipcMain.handle('get-due-installments', async () => {
@@ -1255,8 +1302,8 @@ ipcMain.handle('get-all-payments', async (event, filters = {}) => {
         const conditions = [];
 
         if (search) {
-            conditions.push('(c.full_name LIKE ? OR s.sale_id LIKE ?)');
-            params.push(`%${search}%`, `%${search}%`);
+            conditions.push('(c.full_name LIKE ? OR s.sale_id LIKE ? OR c.id_number LIKE ?)');
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         if (startDate) {
@@ -1407,12 +1454,13 @@ ipcMain.handle('get-dashboard-alerts', async () => {
                 alerts.push({
                     severity: 'warning',
                     title: 'Low Stock Alert',
-                    message: `${p.name} is running low (${p.stock_qty} remaining)`
+                    message: `${p.name} is running low (${p.stock_qty} remaining)`,
+                    type: 'low-stock',
+                    target: 'inventory'
                 });
             });
 
             // Overdue installments
-            // console.log("DEBUG: Checking for overdue installments...");
             dbModule.db.all(`
                 SELECT i.*, COALESCE(c.full_name, s.walkin_name) as full_name
                 FROM installments i
@@ -1420,18 +1468,15 @@ ipcMain.handle('get-dashboard-alerts', async () => {
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 WHERE (i.status = 'Overdue' OR (i.status = 'Active' AND DATE(i.next_due_date) < DATE('now', 'localtime'))) AND s.is_deleted = 0
             `, (err, installments) => {
-                if (err) {
-                    // console.error("DEBUG: Overdue query error:", err);
-                    return reject({ success: false, message: err.message });
-                }
-
-                // console.log(`DEBUG: Found ${installments.length} overdue installments`);
+                if (err) return reject({ success: false, message: err.message });
 
                 installments.forEach(inst => {
                     alerts.push({
                         severity: 'danger',
                         title: 'Overdue Payment',
-                        message: `${inst.full_name || 'Customer'} has an overdue payment of Rs. ${inst.monthly_amount}`
+                        message: `${inst.full_name || 'Customer'} has an overdue payment of Rs. ${inst.monthly_amount}`,
+                        type: 'overdue',
+                        target: 'installments'
                     });
                 });
 
@@ -1441,7 +1486,7 @@ ipcMain.handle('get-dashboard-alerts', async () => {
                     FROM installments i
                     JOIN sales s ON i.sale_id = s.sale_id
                     LEFT JOIN customers c ON s.customer_id = c.customer_id
-                    WHERE i.status = 'Active' AND DATE(i.next_due_date) = DATE('now') AND s.is_deleted = 0
+                    WHERE i.status = 'Active' AND DATE(i.next_due_date) = DATE('now', 'localtime') AND s.is_deleted = 0
                 `, (err, dueToday) => {
                     if (err) return reject({ success: false, message: err.message });
 
@@ -1449,7 +1494,9 @@ ipcMain.handle('get-dashboard-alerts', async () => {
                         alerts.push({
                             severity: 'warning',
                             title: 'Payment Due Today',
-                            message: `${inst.full_name || 'Customer'} has a payment of Rs. ${inst.monthly_amount} due today`
+                            message: `${inst.full_name || 'Customer'} has a payment of Rs. ${inst.monthly_amount} due today`,
+                            type: 'due-today',
+                            target: 'installments'
                         });
                     });
 
@@ -1469,7 +1516,7 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
         const targetDate = date || new Date().toISOString().split('T')[0];
 
         const salesQuery = `
-            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
+            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
             (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
             FROM sales s
@@ -1490,6 +1537,7 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
                     ip.amount_paid as total_amount,
                     'Installment Payment' as payment_type,
                     COALESCE(c.full_name, s.walkin_name) as customer_name,
+                    c.id_number,
                     0 as return_count,
                     ip.amount_paid as down_payment,
                     (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
@@ -1519,7 +1567,7 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
         const targetMonth = month || new Date().toISOString().slice(0, 7);
 
         const salesQuery = `
-            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
+            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
             (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
             FROM sales s
@@ -1540,6 +1588,7 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
                     ip.amount_paid as total_amount,
                     'Installment Payment' as payment_type,
                     COALESCE(c.full_name, s.walkin_name) as customer_name,
+                    c.id_number,
                     0 as return_count,
                     ip.amount_paid as down_payment,
                     (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
@@ -1574,7 +1623,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
             }
 
             const salesQuery = `
-                SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, i.down_payment,
+                SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
                 (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM sales s
@@ -1597,6 +1646,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                         ip.amount_paid as total_amount,
                         'Installment Payment' as payment_type,
                         COALESCE(c.full_name, s.walkin_name) as customer_name,
+                        c.id_number,
                         0 as return_count,
                         ip.amount_paid as down_payment,
                         (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
@@ -1629,7 +1679,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
 ipcMain.handle('get-installment-report', async () => {
     return new Promise((resolve, reject) => {
         const query = `
-            SELECT i.*, c.full_name as customer_name, c.phone,
+            SELECT i.*, c.full_name as customer_name, c.id_number, c.phone,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
             FROM installments i
             JOIN sales s ON i.sale_id = s.sale_id
@@ -1648,7 +1698,7 @@ ipcMain.handle('get-installment-report', async () => {
 ipcMain.handle('get-overdue-report', async () => {
     return new Promise((resolve, reject) => {
         const query = `
-            SELECT i.*, c.full_name as customer_name, c.phone, c.address
+            SELECT i.*, c.full_name as customer_name, c.id_number, c.phone, c.address
             FROM installments i
             JOIN sales s ON i.sale_id = s.sale_id
             JOIN customers c ON s.customer_id = c.customer_id

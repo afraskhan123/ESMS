@@ -271,6 +271,9 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div id="customers-pagination" class="report-pagination hidden">
+                            <!-- Pagination buttons will be injected here -->
+                        </div>
                     </div>
                 </div>
 
@@ -284,10 +287,18 @@
                         <form id="sale-form">
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="sale-customer" class="required">Customer</label>
-                                    <select class="form-control" id="sale-customer" required>
-                                        <option value="">Select Customer</option>
-                                    </select>
+                                    <label for="sale-customer-input" class="required">Customer</label>
+                                    <div class="custom-dropdown" id="sale-customer-dropdown">
+                                        <div class="custom-dropdown-select" id="sale-customer-display">
+                                            <input type="text" id="sale-customer-input"
+                                                placeholder="Select or search customer" autocomplete="off">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </div>
+                                        <div class="custom-dropdown-list" id="sale-customer-list">
+                                            <!-- Customers will be populated here by JS -->
+                                        </div>
+                                        <input type="hidden" id="sale-customer" required>
+                                    </div>
                                 </div>
                                 <div class="form-group hidden" id="walkin-name-group">
                                     <label for="walkin-name" class="required">Customer Name</label>
@@ -502,20 +513,20 @@
                         <div class="table-container" style="overflow: visible;">
                             <table style="table-layout: fixed; width: 100%;">
                                 <colgroup>
-                                    <col style="width: 6%;">
-                                    <col style="width: 20%;">
-                                    <col style="width: 10%;">
-                                    <col style="width: 10%;">
-                                    <col style="width: 10%;">
-                                    <col style="width: 10%;">
-                                    <col style="width: 14%;">
-                                    <col style="width: 10%;">
-                                    <col style="width: 10%;">
+                                    <col style="width: 6%;">  <!-- Inv # -->
+                                    <col style="width: 18%;"> <!-- Product -->
+                                    <col style="width: 10%;"> <!-- Total -->
+                                    <col style="width: 10%;"> <!-- Paid -->
+                                    <col style="width: 10%;"> <!-- Remaining -->
+                                    <col style="width: 10%;"> <!-- Monthly -->
+                                    <col style="width: 12%;"> <!-- Next Due -->
+                                    <col style="width: 10%;"> <!-- Status -->
+                                    <col style="width: 14%;"> <!-- Actions -->
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th style="text-align: center;">Inv #</th>
-                                        <th>Customer</th>
+                                        <th>Product</th>
                                         <th style="text-align: right;">Total</th>
                                         <th style="text-align: right;">Paid</th>
                                         <th style="text-align: right;">Remaining</th>
@@ -529,6 +540,9 @@
                                     <!-- Installments will be loaded dynamically -->
                                 </tbody>
                             </table>
+                        </div>
+                        <div id="installments-pagination" class="report-pagination hidden">
+                            <!-- Pagination buttons will be injected here -->
                         </div>
                     </div>
                 </div>

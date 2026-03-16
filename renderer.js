@@ -17,6 +17,12 @@ let cartItemCounter = 0;
 let currentPaymentsPage = 1;
 const paymentsPageSize = 10;
 
+let currentInstallmentsPage = 1;
+const installmentsPageSize = 5;
+
+let currentCustomersPage = 1;
+const customersPageSize = 10;
+
 // Utility: Debounce function to prevent rapid firing of heavy operations
 function debounce(func, wait) {
     let timeout;
@@ -709,6 +715,96 @@ function selectDropdownItem(type, val) {
 
 // Call initialization
 initCustomDropdowns();
+initSalesCustomerDropdown();
+
+function initSalesCustomerDropdown() {
+    const dropdown = document.getElementById('sale-customer-dropdown');
+    const input = document.getElementById('sale-customer-input');
+    const display = document.getElementById('sale-customer-display');
+
+    if (!dropdown || !input || !display) return;
+
+    display.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('active');
+        if (dropdown.classList.contains('active')) {
+            input.focus();
+        }
+    });
+
+    input.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const filtered = allCustomers.filter(c => 
+            c.full_name.toLowerCase().includes(searchTerm) || 
+            (c.id_number && c.id_number.toLowerCase().includes(searchTerm)) ||
+            (c.phone && c.phone.includes(searchTerm))
+        );
+        renderSaleCustomerDropdownList(filtered);
+        if (!dropdown.classList.contains('active')) dropdown.classList.add('active');
+    });
+
+    input.addEventListener('focus', () => {
+        if (!dropdown.classList.contains('active')) {
+            dropdown.classList.add('active');
+            renderSaleCustomerDropdownList(allCustomers);
+        }
+    });
+}
+
+function renderSaleCustomerDropdownList(customers) {
+    const list = document.getElementById('sale-customer-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    // Add Walk-in option first
+    const walkinItem = document.createElement('div');
+    walkinItem.className = 'custom-dropdown-item';
+    walkinItem.innerHTML = '<span class="custom-dropdown-item-text" style="font-weight: bold; color: #27ae60;">Walk-in Customer (Direct Purchase)</span>';
+    walkinItem.addEventListener('click', () => {
+        selectSaleCustomer(null);
+        document.getElementById('sale-customer-dropdown').classList.remove('active');
+    });
+    list.appendChild(walkinItem);
+
+    customers.forEach(customer => {
+        const item = document.createElement('div');
+        item.className = 'custom-dropdown-item';
+        item.innerHTML = `
+            <div style="display: flex; flex-direction: column;">
+                <span class="custom-dropdown-item-text" style="font-weight: 600;">${customer.full_name}</span>
+            </div>
+        `;
+        item.addEventListener('click', () => {
+            selectSaleCustomer(customer);
+            document.getElementById('sale-customer-dropdown').classList.remove('active');
+        });
+        list.appendChild(item);
+    });
+}
+
+function selectSaleCustomer(customer) {
+    const input = document.getElementById('sale-customer-input');
+    const hiddenInput = document.getElementById('sale-customer');
+    const walkinGroup = document.getElementById('walkin-name-group');
+
+    if (customer) {
+        input.value = customer.full_name;
+        hiddenInput.value = customer.customer_id;
+        walkinGroup.classList.add('hidden');
+        document.getElementById('walkin-name').required = false;
+        document.getElementById('walkin-name').value = '';
+    } else {
+        input.value = 'Walk-in Customer';
+        hiddenInput.value = '0';
+        walkinGroup.classList.remove('hidden');
+        document.getElementById('walkin-name').required = true;
+    }
+
+    // Trigger internal change logic
+    const event = new Event('change', { bubbles: true });
+    hiddenInput.dispatchEvent(event);
+}
 
 // Open Settings (via Admin Profile)
 document.getElementById('admin-profile-btn').addEventListener('click', () => {
@@ -838,29 +934,51 @@ async function loadCustomers() {
         const result = await window.api.getAllCustomers();
         if (result.success) {
             allCustomers = result.customers;
+            currentCustomersPage = 1;
             renderCustomersTable(allCustomers);
-
-            const customerSelect = document.getElementById('sale-customer');
-            customerSelect.innerHTML = '<option value="">Select Customer</option>' +
-                '<option value="0" style="font-weight: bold; color: #27ae60;">Walk-in Customer (Direct Purchase)</option>' +
-                allCustomers.map(c => `<option value="${c.customer_id}">${c.full_name}</option>`).join('');
+            renderSaleCustomerDropdownList(allCustomers);
+            
+            // Duplicate ID Detection (Active records only)
+            const idCounts = {};
+            allCustomers.forEach(c => {
+                const id = c.id_number;
+                if (id && id.trim() !== '' && c.is_deleted === 0) {
+                    idCounts[id] = (idCounts[id] || 0) + 1;
+                }
+            });
+            const duplicates = Object.keys(idCounts).filter(id => idCounts[id] > 1);
+            if (duplicates.length > 0) {
+                const dupMsg = duplicates.map(id => `ID '${id}' (${idCounts[id]} times)`).join(', ');
+                showNotification('error', `Duplicate ID Numbers found: ${dupMsg}. Please clean these up for security.`);
+            }
         }
     } catch (error) {
         console.error('Error loading customers:', error);
     }
 }
 
-function renderCustomersTable(customers) {
+function renderCustomersTable(customers, page = null) {
     const tbody = document.getElementById('customers-tbody');
+    const paginationDiv = document.getElementById('customers-pagination');
 
     if (customers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No customers found</td></tr>';
+        if (paginationDiv) paginationDiv.classList.add('hidden');
         return;
     }
 
-    tbody.innerHTML = customers.map((customer, index) => `
+    const totalPages = Math.max(1, Math.ceil(customers.length / customersPageSize));
+    if (page !== null) currentCustomersPage = page;
+    if (currentCustomersPage > totalPages) currentCustomersPage = totalPages;
+
+    const startIdx = (currentCustomersPage - 1) * customersPageSize;
+    const pagedCustomers = customers.slice(startIdx, startIdx + customersPageSize);
+
+    tbody.innerHTML = pagedCustomers.map((customer, index) => {
+        const displayIndex = startIdx + index + 1;
+        return `
         <tr>
-            <td>${index + 1}</td>
+            <td>${displayIndex}</td>
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <img src="${customer.image_path || 'assets/default-avatar.png'}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #ccc;">
@@ -885,7 +1003,40 @@ function renderCustomersTable(customers) {
                 </button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
+
+    // Render pagination controls
+    if (paginationDiv) {
+        if (totalPages <= 1) {
+            paginationDiv.classList.add('hidden');
+        } else {
+            paginationDiv.classList.remove('hidden');
+            paginationDiv.innerHTML = `
+                <button class="btn btn-secondary btn-sm" id="cust-prev-page" ${currentCustomersPage <= 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span class="report-page-info">Page ${currentCustomersPage} of ${totalPages}</span>
+                <button class="btn btn-secondary btn-sm" id="cust-next-page" ${currentCustomersPage >= totalPages ? 'disabled' : ''}>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+
+            // Add event listeners
+            document.getElementById('cust-prev-page')?.addEventListener('click', () => {
+                if (currentCustomersPage > 1) {
+                    currentCustomersPage--;
+                    renderCustomersTable(customers);
+                }
+            });
+
+            document.getElementById('cust-next-page')?.addEventListener('click', () => {
+                if (currentCustomersPage < totalPages) {
+                    currentCustomersPage++;
+                    renderCustomersTable(customers);
+                }
+            });
+        }
+    }
 }
 
 function viewCustomerDetail(customerId) {
@@ -907,8 +1058,10 @@ document.getElementById('customer-search').addEventListener('input', debounce((e
     const searchTerm = e.target.value.toLowerCase();
     const filtered = allCustomers.filter(c =>
         c.full_name.toLowerCase().includes(searchTerm) ||
-        c.phone.includes(searchTerm)
+        c.phone.includes(searchTerm) ||
+        (c.id_number && c.id_number.toLowerCase().includes(searchTerm))
     );
+    currentCustomersPage = 1; // Reset to page 1 on new search
     renderCustomersTable(filtered);
 }, 300));
 
@@ -1823,8 +1976,32 @@ async function viewInvoice(saleId, currentBalance = null) {
                         </div>
                     </div>
                     
+                    ${(sale.payment_type === 'Installment' && sale.payments && sale.payments.length > 0) ? `
+                    <div class="invoice-plan-details" style="margin-top: 1rem; border-top: 2px dashed var(--danger-light); padding-top: 1rem;">
+                        <h3 style="margin-bottom: 0.5rem; text-align: ${textAlign}; color: var(--primary); font-size: 1.1rem; border: none; background: transparent;">${isUrdu ? 'قسطوں کی ادائیگی کی تاریخ' : 'Payment History'}</h3>
+                        <table class="invoice-table items-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: ${textAlign};">${isUrdu ? 'تاریخ' : 'Date'}</th>
+                                    <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'رقم ادا کی' : 'Amount Paid'}</th>
+                                    <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'بقیہ رقم' : 'Remaining Balance'}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sale.payments.map(payment => `
+                                    <tr>
+                                        <td style="text-align: ${textAlign};">${formatDate(payment.payment_date)}</td>
+                                        <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.amount_paid)}</td>
+                                        <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.remaining_balance_after)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : ''}
+
                     ${sale.payment_type === 'Installment' ? `
-                        <div class="invoice-plan-details">
+                        <div class="invoice-plan-details" style="margin-top: 1rem;">
                             <h3>${t.installmentPlan}</h3>
                             <table class="invoice-table">
                                 <tr>
@@ -1861,7 +2038,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                         </div>
                         ` : ''}
                     ` : ''}
-                    
+
                     <div class="invoice-items">
                         <h3>${t.itemsPurchased}</h3>
                         <table class="invoice-table">
@@ -1870,7 +2047,6 @@ async function viewInvoice(saleId, currentBalance = null) {
                                     <th style="text-align: ${textAlign};">${t.product}</th>
                                     <th style="text-align: center;">${t.qty}</th>
                                     <th style="text-align: ${isUrdu ? 'left' : 'right'};">${sale.payment_type === 'Installment' ? t.installmentPrice : t.subtotal}</th>
-
                                 </tr>
                             </thead>
                             <tbody>
@@ -1883,7 +2059,6 @@ async function viewInvoice(saleId, currentBalance = null) {
                                         <td style="text-align: center;">${item.quantity}</td>
                                         <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(item.subtotal)}</td>
                                     </tr>
-
                                 `).join('')}
                             </tbody>
                             <tfoot>
@@ -1891,11 +2066,10 @@ async function viewInvoice(saleId, currentBalance = null) {
                                     <td colspan="2" style="text-align: ${isUrdu ? 'left' : 'right'}; font-weight: bold;">${t.totalAmount}</td>
                                     <td style="text-align: ${isUrdu ? 'left' : 'right'}; font-weight: bold;">${t.currency} ${formatCurrency(sale.total_amount)}</td>
                                 </tr>
-
                             </tfoot>
                         </table>
                     </div>
-                    
+
                     ${sale.items.some(i => i.returned_qty > 0) ? `
                     <div class="invoice-items" style="margin-top: 2rem; border-top: 2px dashed var(--danger-light); padding-top: 1rem;">
                         <h3 style="color: var(--danger);"><i class="fas fa-undo"></i> ${t.returnSummary}</h3>
@@ -1906,7 +2080,6 @@ async function viewInvoice(saleId, currentBalance = null) {
                                     <th style="text-align: center;">${t.retQty}</th>
                                     <th style="text-align: ${isUrdu ? 'left' : 'right'};">${t.totalRefundAmount}</th>
                                 </tr>
-
                             </thead>
                             <tbody>
                                 ${sale.items.filter(i => i.returned_qty > 0).map(item => `
@@ -1915,7 +2088,6 @@ async function viewInvoice(saleId, currentBalance = null) {
                                         <td style="text-align: center;">${item.returned_qty}</td>
                                         <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(item.returned_qty * (item.subtotal / item.quantity))}</td>
                                     </tr>
-
                                 `).join('')}
                             </tbody>
                             <tfoot style="border-top: 1px solid var(--danger);">
@@ -1923,32 +2095,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                                     <td colspan="2" style="text-align: ${isUrdu ? 'left' : 'right'}; font-weight: bold; color: var(--danger);">${t.totalRefunded}</td>
                                     <td style="text-align: ${isUrdu ? 'left' : 'right'}; font-weight: bold; color: var(--danger);">${t.currency} ${formatCurrency(sale.items.reduce((sum, i) => sum + ((i.returned_qty || 0) * (i.subtotal / i.quantity)), 0))}</td>
                                 </tr>
-
                             </tfoot>
-                        </table>
-                    </div>
-                    ` : ''}
-
-                    ${(sale.payment_type === 'Installment' && sale.payments && sale.payments.length > 0) ? `
-                    <div class="invoice-plan-details" style="margin-top: 2rem; border-top: 2px dashed var(--danger-light); padding-top: 1rem;">
-                        <h3 style="margin-bottom: 0.5rem; text-align: ${textAlign}; color: var(--primary); font-size: 1.1rem; border: none; background: transparent;">${isUrdu ? 'قسطوں کی ادائیگی کی تاریخ' : 'Payment History'}</h3>
-                        <table class="invoice-table items-table">
-                            <thead>
-                                <tr>
-                                    <th style="text-align: ${textAlign};">${isUrdu ? 'تاریخ' : 'Date'}</th>
-                                    <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'رقم ادا کی' : 'Amount Paid'}</th>
-                                    <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'بقیہ رقم' : 'Remaining Balance'}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${sale.payments.map(payment => `
-                                    <tr>
-                                        <td style="text-align: ${textAlign};">${formatDate(payment.payment_date)}</td>
-                                        <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.amount_paid)}</td>
-                                        <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.remaining_balance_after)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
                         </table>
                     </div>
                     ` : ''}
@@ -2198,6 +2345,7 @@ async function loadInstallments(filters = {}) {
         const result = await window.api.getAllInstallments(filters);
         if (result.success) {
             allInstallments = result.installments;
+            currentInstallmentsPage = 1;
             renderInstallmentsTable(allInstallments);
         }
     } catch (error) {
@@ -2205,27 +2353,76 @@ async function loadInstallments(filters = {}) {
     }
 }
 
-function renderInstallmentsTable(installments) {
+function renderInstallmentsTable(installments, page = null) {
     const tbody = document.getElementById('installments-tbody');
+    const paginationDiv = document.getElementById('installments-pagination');
 
     if (installments.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No installments found</td></tr>';
+        if (paginationDiv) paginationDiv.classList.add('hidden');
         return;
     }
 
-    tbody.innerHTML = installments.map(inst => {
+    // Group installments by customer name
+    const groups = {};
+    const groupOrder = [];
+    installments.forEach(inst => {
+        const key = inst.customer_name || 'N/A';
+        if (!groups[key]) {
+            groups[key] = {
+                installments: [],
+                cnic: inst.id_number || 'N/A'
+            };
+            groupOrder.push(key);
+        }
+        groups[key].installments.push(inst);
+    });
+
+    // Pagination by Groups (Users)
+    const totalGroups = groupOrder.length;
+    const totalPages = Math.max(1, Math.ceil(totalGroups / installmentsPageSize));
+    if (page !== null) currentInstallmentsPage = page;
+    if (currentInstallmentsPage > totalPages) currentInstallmentsPage = totalPages;
+    
+    const startIdx = (currentInstallmentsPage - 1) * installmentsPageSize;
+    const pagedGroups = groupOrder.slice(startIdx, startIdx + installmentsPageSize);
+
+    // Build the rows for the paged groups
+    const pageRows = [];
+    pagedGroups.forEach(name => {
+        const group = groups[name];
+        pageRows.push({ type: 'group', name, count: group.installments.length, cnic: group.cnic });
+        group.installments.forEach(inst => pageRows.push({ type: 'row', inst }));
+    });
+
+    tbody.innerHTML = pageRows.map(rowData => {
+        if (rowData.type === 'group') {
+            return `
+            <tr style="background: var(--dark-surface, #1e293b); border-top: 2px solid var(--accent-color, #3b82f6);">
+                <td colspan="9" style="padding: 6px 12px; font-weight: 700; color: var(--accent-color, #3b82f6); font-size: 0.88rem; letter-spacing: 0.03em;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div>
+                            <i class="fas fa-user" style="margin-right: 6px; opacity: 0.8;"></i>${rowData.name}
+                            <span style="margin-left: 8px; font-weight: 400; font-size: 0.8rem; opacity: 0.7;">(${rowData.count} record${rowData.count !== 1 ? 's' : ''})</span>
+                        </div>
+                        <div style="font-size: 0.8rem; opacity: 0.9; color: #94a3b8; font-weight: normal;">
+                            <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${rowData.cnic}
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        const inst = rowData.inst;
         const badgeClass = inst.status === 'Active' ? 'badge-success' :
             inst.status === 'Overdue' ? 'badge-danger' : 'badge-secondary';
 
         const paidAmount = inst.total_amount - inst.remaining_balance;
-        const paidPct = Math.min(100, Math.round((paidAmount / inst.total_amount) * 100)) || 0;
-        const progressColor = inst.status === 'Overdue' ? '#e74c3c' :
-            inst.status === 'Completed' ? '#27ae60' : '#3498db';
 
         return `
             <tr>
                 <td style="text-align: center;"><strong>#${inst.sale_id}</strong> ${inst.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${inst.sale_id})" style="font-size: 0.6rem; padding: 2px 4px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}</td>
-                <td>${inst.customer_name || 'N/A'}</td>
+                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${inst.product_names || 'N/A'}">${inst.product_names || 'N/A'}</td>
                 <td style="text-align: right;">${formatCurrency(inst.total_amount)}</td>
                 <td style="text-align: right; color: #27ae60; font-weight: 600;">${formatCurrency(paidAmount)}</td>
                 <td style="text-align: right;" class="text-danger font-weight-bold">${formatCurrency(inst.remaining_balance)}</td>
@@ -2263,6 +2460,34 @@ function renderInstallmentsTable(installments) {
             </tr>
         `;
     }).join('');
+
+    // Render pagination controls
+    if (paginationDiv) {
+        if (totalPages <= 1) {
+            paginationDiv.classList.add('hidden');
+        } else {
+            paginationDiv.classList.remove('hidden');
+            paginationDiv.innerHTML = `
+                <button class="btn btn-secondary btn-sm" id="inst-prev-page" ${currentInstallmentsPage <= 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span class="report-page-info">Page ${currentInstallmentsPage} of ${totalPages}</span>
+                <button class="btn btn-secondary btn-sm" id="inst-next-page" ${currentInstallmentsPage >= totalPages ? 'disabled' : ''}>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+            document.getElementById('inst-prev-page').addEventListener('click', () => {
+                if (currentInstallmentsPage > 1) {
+                    renderInstallmentsTable(installments, currentInstallmentsPage - 1);
+                }
+            });
+            document.getElementById('inst-next-page').addEventListener('click', () => {
+                if (currentInstallmentsPage < totalPages) {
+                    renderInstallmentsTable(installments, currentInstallmentsPage + 1);
+                }
+            });
+        }
+    }
 }
 
 // Installment search
@@ -2270,8 +2495,10 @@ document.getElementById('installment-search').addEventListener('input', debounce
     const term = e.target.value.toLowerCase().trim();
     const filtered = allInstallments.filter(inst =>
         (inst.customer_name && inst.customer_name.toLowerCase().includes(term)) ||
+        (inst.id_number && inst.id_number.toLowerCase().includes(term)) ||
         inst.sale_id.toString().includes(term)
     );
+    currentInstallmentsPage = 1;
     renderInstallmentsTable(filtered);
 }, 300));
 
@@ -2282,6 +2509,7 @@ document.querySelectorAll('.installment-filter').forEach(btn => {
         btn.classList.add('active');
 
         const status = btn.dataset.status;
+        currentInstallmentsPage = 1;
         if (status) {
             loadInstallments({ status });
         } else {
@@ -2836,8 +3064,17 @@ async function generateDailyReport(date) {
                         }, 0);
 
                         let groupHtml = `
-                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
-                                        <td colspan="5" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="5" style="font-weight: bold; color: var(--primary);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                <div>
+                                                    <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                </div>
+                                                <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>`;
 
                         groupHtml += customerSales.map(s => {
@@ -2969,8 +3206,17 @@ async function generateMonthlyReport() {
                         }, 0);
 
                         let groupHtml = `
-                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
-                                        <td colspan="6" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="6" style="font-weight: bold; color: var(--primary);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                <div>
+                                                    <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                </div>
+                                                <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>`;
 
                         groupHtml += customerSales.map(s => {
@@ -3086,10 +3332,23 @@ async function generateInstallmentReport() {
                         const customerRemaining = customerInstalls.reduce((sum, i) => sum + i.remaining_balance, 0);
 
                         let groupHtml = `
-                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1;">
-                                        <td colspan="3" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName} <span style="font-size: 0.8em; font-weight: normal; color: #64748b;">(Phone: ${customerInstalls[0].phone || '-'})</span></td>
-                                        <td class="text-right" style="font-weight: bold; color: var(--warning);"><span style="font-size: 0.8rem; color: #64748b; margin-right: 5px;">Remaining:</span>Rs. ${formatCurrency(customerRemaining)}</td>
-                                        <td colspan="2"></td>
+                                    <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="6" style="font-weight: bold; color: var(--primary); padding: 8px 15px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                <div>
+                                                    <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    <span style="font-size: 0.8em; font-weight: normal; color: #64748b; margin-left: 10px;">(Phone: ${customerInstalls[0].phone || '-'})</span>
+                                                </div>
+                                                <div style="display: flex; align-items: center; gap: 20px;">
+                                                    <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
+                                                        <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerInstalls[0].id_number || 'N/A'}
+                                                    </div>
+                                                    <div style="font-weight: bold; color: var(--warning);">
+                                                        <span style="font-size: 0.8rem; color: #64748b; margin-right: 5px;">Remaining:</span>Rs. ${formatCurrency(customerRemaining)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>`;
 
                         groupHtml += customerInstalls.map(i => {
@@ -3173,10 +3432,28 @@ async function generateOverdueReport() {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${installments.map(i => `
+                                ${(() => {
+                    const grouped = groupByKey(installments, 'customer_name');
+                    return Object.keys(grouped).sort().map(customerName => {
+                        const items = grouped[customerName];
+                        let groupRows = `
+                                    <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="5" style="font-weight: bold; color: var(--primary); padding: 8px 15px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                <div>
+                                                    <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                </div>
+                                                <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${items[0].id_number || 'N/A'}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>`;
+                        
+                        groupRows += items.map(i => `
                                     <tr>
-                                        <td style="font-weight: 600;">
-                                            ${i.customer_name}
+                                        <td style="font-weight: 600; padding-left: 20px;">
+                                            ↳ Inv #${i.sale_id}
                                             ${i.return_count > 0 ? `<span class="badge badge-danger" onclick="viewInvoice(${i.sale_id})" style="font-size: 0.6rem; padding: 2px 4px; margin-left: 5px; cursor: pointer;" title="Click to view return details">Ret</span>` : ''}
                                         </td>
                                         <td>${i.phone}</td>
@@ -3189,7 +3466,10 @@ async function generateOverdueReport() {
                                             </div>
                                         </td>
                                     </tr>
-                                `).join('')}
+                                `).join('');
+                        return groupRows;
+                    }).join('');
+                })()}
                             </tbody>
                             <tfoot>
                                 <tr>
@@ -3382,7 +3662,7 @@ document.getElementById('generate-profit-report-btn').addEventListener('click', 
 // ═══════════════════════════════════════════════════════════
 // REPORT PAGINATION STATE
 // ═══════════════════════════════════════════════════════════
-const REPORT_PAGE_SIZE = 10;
+const REPORT_PAGE_SIZE = 5;
 let reportPagination = { currentPage: 1, totalPages: 1, allRows: [] };
 
 function showReport(title, content) {
@@ -3405,26 +3685,53 @@ function initReportPagination() {
 }
 
 function applyReportPagination(rows) {
-    const totalRows = rows.length;
-    const totalPages = Math.max(1, Math.ceil(totalRows / REPORT_PAGE_SIZE));
+    // Detect if we are using grouping (headers)
+    const headers = rows.filter(row => row.classList.contains('report-group-header'));
+    const isGrouped = headers.length > 0;
+
+    const totalItems = isGrouped ? headers.length : rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / REPORT_PAGE_SIZE));
     reportPagination.totalPages = totalPages;
 
     // Clamp current page
     if (reportPagination.currentPage > totalPages) reportPagination.currentPage = totalPages;
     if (reportPagination.currentPage < 1) reportPagination.currentPage = 1;
 
-    const start = (reportPagination.currentPage - 1) * REPORT_PAGE_SIZE;
-    const end = start + REPORT_PAGE_SIZE;
+    const startIdx = (reportPagination.currentPage - 1) * REPORT_PAGE_SIZE;
+    const endIdx = startIdx + REPORT_PAGE_SIZE;
 
-    // Show/hide rows
-    reportPagination.allRows.forEach(row => row.style.display = 'none');
-    rows.forEach((row, index) => {
-        row.style.display = (index >= start && index < end) ? '' : 'none';
-    });
+    // Hide all rows initially
+    reportPagination.allRows.forEach(row => (row.style.display = 'none'));
+
+    if (isGrouped) {
+        // Show groups within the range
+        let visibleGroups = 0;
+        let showingRow = false;
+
+        rows.forEach(row => {
+            if (row.classList.contains('report-group-header')) {
+                const groupIdx = headers.indexOf(row);
+                if (groupIdx >= startIdx && groupIdx < endIdx) {
+                    row.style.display = '';
+                    showingRow = true;
+                    visibleGroups++;
+                } else {
+                    showingRow = false;
+                }
+            } else if (showingRow) {
+                row.style.display = '';
+            }
+        });
+    } else {
+        // Simple row pagination
+        rows.forEach((row, index) => {
+            row.style.display = index >= startIdx && index < endIdx ? '' : 'none';
+        });
+    }
 
     // Update pagination controls
     const paginationEl = document.getElementById('report-pagination');
-    if (totalRows <= REPORT_PAGE_SIZE) {
+    if (totalItems <= REPORT_PAGE_SIZE) {
         paginationEl.classList.add('hidden');
     } else {
         paginationEl.classList.remove('hidden');
@@ -3631,8 +3938,17 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
                     }, 0);
 
                     let groupHtml = `
-                                    <tr style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
-                                        <td colspan="6" style="font-weight: bold; color: var(--primary);"><i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}</td>
+                                    <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
+                                        <td colspan="6" style="font-weight: bold; color: var(--primary);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                                <div>
+                                                    <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                </div>
+                                                <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>`;
 
                     groupHtml += customerSales.map(s => {
@@ -3864,7 +4180,8 @@ function updateNotificationUI(alerts) {
                 <div class="notification-item ${isRead ? '' : 'unread'}" 
                      data-id="${alertId}"
                      data-severity="${severity}"
-                     onclick="markNotificationAsRead('${alertId}', this)">
+                     style="cursor: pointer;"
+                     onclick="markNotificationAsRead('${alertId}', this); navigateFromAlert('${alert.type}', '${alert.target}')">
                     <div class="notification-icon">
                         <i class="fas fa-${severity === 'danger' ? 'circle-exclamation' : 'triangle-exclamation'}"></i>
                     </div>
@@ -3890,7 +4207,11 @@ function updateNotificationUI(alerts) {
             dashboardAlertsContainer.innerHTML = '<p class="text-muted">No active alerts</p>';
         } else {
             dashboardAlertsContainer.innerHTML = activeAlerts.map(alert => `
-                <div class="alert alert-${alert.severity}">
+                <div class="alert alert-${alert.severity}" 
+                     style="cursor: pointer; transition: transform 0.2s;" 
+                     onclick="navigateFromAlert('${alert.type}', '${alert.target}')"
+                     onmouseover="this.style.transform='translateX(5px)'"
+                     onmouseout="this.style.transform='translateX(0)'">
                     <i class="fas fa-${alert.severity === 'danger' ? 'exclamation-circle' : 'exclamation-triangle'}"></i>
                     <div>
                         <strong>${alert.title}</strong><br>
@@ -3900,6 +4221,39 @@ function updateNotificationUI(alerts) {
             `).join('');
         }
     }
+}
+
+
+window.navigateFromAlert = (type, target) => {
+    if (!target) return;
+
+    // Switch to the target tab
+    const tabBtn = document.querySelector(`.nav-item[data-tab="${target}"]`);
+    if (tabBtn) {
+        tabBtn.click();
+
+        // If it's an installment alert, apply the "Overdue" filter
+        if (target === 'installments') {
+            setTimeout(() => {
+                const overdueBtn = document.querySelector('.installment-filter[data-status="Overdue"]');
+                if (type === 'overdue' && overdueBtn) {
+                    overdueBtn.click();
+                } else if (type === 'due-today') {
+                    // Just refresh installments for due today
+                    const filterAll = document.querySelector('.installment-filter[data-status="All"]');
+                    if (filterAll) filterAll.click();
+                    else loadInstallments();
+                }
+            }, 100);
+        } else if (target === 'inventory') {
+            // If low stock, maybe also set the search or filter?
+            // Currently just switching to the tab is enough
+        }
+    }
+
+    // Close notification dropdown if open
+    const dropdown = document.getElementById('notification-dropdown');
+    if (dropdown) dropdown.classList.remove('active');
 }
 
 // Global functions for inline onclick handlers

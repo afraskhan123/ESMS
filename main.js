@@ -1,9 +1,16 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const log = require('electron-log');
 const dbModule = require('./database');
 
+// Configure Technical Logging
+log.transports.file.level = 'info';
+log.transports.console.level = 'debug';
+log.info('Application starting...');
+
 let mainWindow;
+let currentUser = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -49,6 +56,35 @@ app.on('window-all-closed', () => {
     }
 });
 
+ipcMain.handle('log', (event, level, message) => {
+    if (log[level]) {
+        log[level](`[Renderer] ${message}`);
+    } else {
+        log.info(`[Renderer] ${message}`);
+    }
+});
+
+ipcMain.handle('clear-activity-logs', async () => {
+    try {
+        await dbModule.dbRun('DELETE FROM activity_logs');
+        dbModule.logActivity('admin', 'Clear Logs', 'Cleared all activity logs');
+        return { success: true };
+    } catch (err) {
+        log.error('Error clearing activity logs:', err);
+        return { success: false, message: err.message };
+    }
+});
+
+ipcMain.handle('get-activity-logs', async (event, limit = 100) => {
+    try {
+        const rows = await dbModule.dbAll('SELECT * FROM activity_logs ORDER BY log_id DESC LIMIT ?', [limit]);
+        return { success: true, logs: rows };
+    } catch (err) {
+        log.error('Error fetching activity logs:', err);
+        return { success: false, message: err.message };
+    }
+});
+
 // ═══════════════════════════════════════════════════════════
 // AUTHENTICATION HANDLERS
 // ═══════════════════════════════════════════════════════════
@@ -62,6 +98,8 @@ ipcMain.handle('login', async (event, { username, password }) => {
                 if (err) {
                     reject({ success: false, message: err.message });
                 } else if (row) {
+                    dbModule.logActivity(username, 'Login', 'User successfully logged in.');
+                    currentUser = { id: row.admin_id, username: row.username };
                     let pImage = row.profile_image;
                     if (pImage && fs.existsSync(pImage)) {
                         try {
@@ -72,6 +110,7 @@ ipcMain.handle('login', async (event, { username, password }) => {
                     }
                     resolve({ success: true, admin: { id: row.admin_id, username: row.username, profile_image: pImage } });
                 } else {
+                    dbModule.logActivity(username, 'Login Failed', 'Invalid username or password attempt.');
                     resolve({ success: false, message: 'Invalid username or password' });
                 }
             }
@@ -152,6 +191,7 @@ ipcMain.handle('add-product', async (event, product) => {
                 if (err) {
                     resolve({ success: false, message: err.message });
                 } else {
+                    dbModule.logActivity(currentUser?.username || 'admin', 'Add Product', `Added product: ${name}. Category: ${category || 'N/A'}, Price: Rs. ${selling_price}, Initial Stock: ${stock_qty} (ID: ${this.lastID})`);
                     resolve({ success: true, message: 'Product added successfully', product_id: this.lastID });
                 }
             }
@@ -176,6 +216,7 @@ ipcMain.handle('update-product', async (event, product) => {
                 if (err) {
                     return resolve({ success: false, message: err.message });
                 }
+                dbModule.logActivity(currentUser?.username || 'admin', 'Update Product', `Updated product: ${name} (ID: ${product_id}). New Price: Rs. ${selling_price}, New Stock: ${stock_qty}`);
                 // Try to update last_updated separately; silently ignore if column doesn't exist yet
                 dbModule.db.run(
                     'UPDATE products SET last_updated = CURRENT_TIMESTAMP WHERE product_id = ?',
@@ -194,6 +235,7 @@ ipcMain.handle('delete-product', async (event, product_id) => {
             if (err) {
                 reject({ success: false, message: err.message });
             } else {
+                dbModule.logActivity(currentUser?.username || 'admin', 'Delete Product', `Deleted product ID: ${product_id}`);
                 resolve({ success: true, message: 'Product deleted successfully' });
             }
         });
@@ -437,6 +479,7 @@ ipcMain.handle('add-customer', async (event, customer) => {
                 if (err) {
                     resolve({ success: false, message: err.message });
                 } else {
+                    dbModule.logActivity(currentUser?.username || 'admin', 'Add Customer', `Added customer: ${fullName}. CNIC: ${idNumber || 'N/A'} (ID: ${this.lastID})`);
                     resolve({ success: true, message: 'Customer added successfully', customer_id: this.lastID });
                 }
             });
@@ -487,6 +530,7 @@ ipcMain.handle('update-customer', async (event, customer) => {
                     if (err) {
                         resolve({ success: false, message: err.message });
                     } else {
+                        dbModule.logActivity(currentUser?.username || 'admin', 'Update Customer', `Updated customer: ${fullName} (ID: ${customer_id}). New CNIC: ${idNumber || 'N/A'}`);
                         resolve({ success: true, message: 'Customer updated successfully' });
                     }
                 }
@@ -520,6 +564,7 @@ ipcMain.handle('delete-customer', async (event, customer_id) => {
                 if (err) {
                     return resolve({ success: false, message: 'Failed to delete customer: ' + err.message });
                 }
+                dbModule.logActivity(currentUser?.username || 'admin', 'Delete Customer', `Deleted customer ID: ${customer_id}`);
                 resolve({ success: true, message: 'Customer deleted successfully' });
             });
         });
@@ -593,34 +638,36 @@ ipcMain.handle('get-customer-history', async (event, customer_id) => {
 ipcMain.handle('create-sale', async (event, saleData) => {
     return new Promise((resolve, reject) => {
         try {
-            const { customer_id, walkin_name, items, payment_type, installment_data } = saleData;
+            const { customer_id, walkin_name, items, payment_type, total_amount, installment_data } = saleData;
             
             if (!items || !Array.isArray(items)) {
                 return resolve({ success: false, message: 'Invalid items provided' });
             }
 
-            const total_amount = items.reduce((sum, item) => sum + item.subtotal, 0);
-
             if (total_amount < 0) {
                 return resolve({ success: false, message: 'Total amount cannot be negative' });
             }
 
-        if (installment_data) {
-            if (installment_data.down_payment < 0) {
-                return resolve({ success: false, message: 'Down payment cannot be negative' });
-            }
-            if (installment_data.down_payment > total_amount) {
-                return resolve({ success: false, message: 'Down payment cannot be greater than total amount' });
-            }
-        }
+        const getWalkinId = () => {
+            return new Promise((res) => {
+                if (!customer_id || customer_id === '0') {
+                    dbModule.getDatabase().get('SELECT MAX(walkin_id) as maxId FROM sales', (err, row) => {
+                        res(row && row.maxId ? row.maxId + 1 : 1);
+                    });
+                } else {
+                    res(null);
+                }
+            });
+        };
 
-        dbModule.db.serialize(() => {
-            dbModule.db.run('BEGIN TRANSACTION');
+        const proceedWithSale = (walkin_id = null) => {
+            dbModule.db.serialize(() => {
+                dbModule.db.run('BEGIN TRANSACTION');
 
-            // Insert sale
-            dbModule.db.run(
-                'INSERT INTO sales (customer_id, walkin_name, total_amount, payment_type) VALUES (?, ?, ?, ?)',
-                [customer_id, walkin_name, total_amount, payment_type],
+                // Insert sale
+                dbModule.db.run(
+                    'INSERT INTO sales (customer_id, walkin_name, walkin_id, total_amount, payment_type) VALUES (?, ?, ?, ?, ?)',
+                    [customer_id, walkin_name, walkin_id, total_amount, payment_type],
                 function (err) {
                     if (err) {
                         dbModule.db.run('ROLLBACK');
@@ -658,33 +705,38 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                     return;
                                 }
 
-                                // Update product stock with VALIDATION
-                                dbModule.db.run(
-                                    'UPDATE products SET stock_qty = stock_qty - ? WHERE product_id = ? AND stock_qty >= ?',
-                                    [item.quantity, item.product_id, item.quantity],
-                                    function (err) {
-                                        if (err) {
-                                            if (!errorOccurred) {
-                                                errorOccurred = true;
-                                                dbModule.db.run('ROLLBACK');
-                                                resolve({ success: false, message: err.message });
+                                // Update product stock with VALIDATION (only if product_id exists)
+                                if (item.product_id) {
+                                    dbModule.db.run(
+                                        'UPDATE products SET stock_qty = stock_qty - ? WHERE product_id = ? AND stock_qty >= ?',
+                                        [item.quantity, item.product_id, item.quantity],
+                                        function (err) {
+                                            if (err) {
+                                                if (!errorOccurred) {
+                                                    errorOccurred = true;
+                                                    dbModule.db.run('ROLLBACK');
+                                                    resolve({ success: false, message: err.message });
+                                                }
+                                                return;
                                             }
-                                            return;
-                                        }
 
-                                        if (this.changes === 0) {
-                                            if (!errorOccurred) {
-                                                errorOccurred = true;
-                                                dbModule.db.run('ROLLBACK');
-                                                resolve({ success: false, message: `Insufficient stock for product: ${item.product_name}` });
+                                            if (this.changes === 0) {
+                                                if (!errorOccurred) {
+                                                    errorOccurred = true;
+                                                    dbModule.db.run('ROLLBACK');
+                                                    resolve({ success: false, message: `Insufficient stock for product: ${item.product_name}` });
+                                                }
+                                                return;
                                             }
-                                            return;
-                                        }
 
-                                        // Proceed to next item
-                                        processNextItem(index + 1);
-                                    }
-                                );
+                                            // Proceed to next item
+                                            processNextItem(index + 1);
+                                        }
+                                    );
+                                } else {
+                                    // No product_id (custom item) — no stock to update
+                                    processNextItem(index + 1);
+                                }
                             }
                         );
                     };
@@ -712,6 +764,8 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                             dbModule.db.run('ROLLBACK');
                                             return resolve({ success: false, message: err.message });
                                         }
+                                        const productNames = items.map(i => i.product_name).join(', ');
+                                        dbModule.logActivity(currentUser?.username || 'admin', 'Create Sale', `New installment sale (ID: ${sale_id}). Customer ID: ${customer_id}, Products: ${productNames}, Total: Rs. ${total_amount}, Duration: ${installment_duration} Mo.`);
                                         resolve({ success: true, message: 'Sale created successfully', sale_id });
                                     });
                                 }
@@ -722,6 +776,8 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                                     dbModule.db.run('ROLLBACK');
                                     return resolve({ success: false, message: err.message });
                                 }
+                                const productNames = items.map(i => i.product_name).join(', ');
+                                dbModule.logActivity(currentUser?.username || 'admin', 'Create Sale', `New cash sale (ID: ${sale_id}). Customer: ${customer_id ? 'ID ' + customer_id : (walkin_name || 'Walk-in')}, Products: ${productNames}, Total: Rs. ${total_amount}`);
                                 resolve({ success: true, message: 'Sale created successfully', sale_id });
                             });
                         }
@@ -732,6 +788,11 @@ ipcMain.handle('create-sale', async (event, saleData) => {
                 }
             );
         });
+        };
+
+        getWalkinId().then(wId => {
+            proceedWithSale(wId);
+        });
         } catch (error) {
             return resolve({ success: false, message: error.message || 'An unknown error occurred during sale creation' });
         }
@@ -741,7 +802,7 @@ ipcMain.handle('create-sale', async (event, saleData) => {
 ipcMain.handle('get-all-sales', async (event, filters = {}) => {
     return new Promise((resolve, reject) => {
         const query = `
-            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name,
+            SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, s.walkin_id,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.customer_id
@@ -775,7 +836,7 @@ ipcMain.handle('delete-all-sales', async () => {
 ipcMain.handle('get-sale-details', async (event, sale_id) => {
     return new Promise((resolve, reject) => {
         const saleQuery = `
-                SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.phone, c.address,
+                SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, s.walkin_id, c.phone, c.address,
                        i.installment_id, i.down_payment, i.installment_duration, i.monthly_amount, i.next_due_date, i.remaining_balance,
                        i.guarantor_name, i.guarantor_cnic, i.guarantor_mobile, i.guarantor_address
                 FROM sales s
@@ -802,7 +863,7 @@ ipcMain.handle('get-sale-details', async (event, sale_id) => {
 
                 // Fetch installment payments if it's an installment sale
                 if (sale.payment_type === 'Installment' && sale.installment_id) {
-                    dbModule.db.all('SELECT * FROM installment_payments WHERE installment_id = ? ORDER BY payment_date ASC',
+                    dbModule.db.all('SELECT *, COALESCE(payment_method, \'Cash\') as payment_method FROM installment_payments WHERE installment_id = ? ORDER BY payment_date ASC',
                         [sale.installment_id],
                         (err, payments) => {
                             if (err) {
@@ -827,6 +888,7 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
             const processReturns = async () => {
                 try {
                     let totalRefund = 0;
+                    let returnedProductNames = [];
 
                     for (const itemReturn of items) {
                         const { saleItemId, returnQty } = itemReturn;
@@ -858,6 +920,8 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
                             dbModule.db.run('UPDATE products SET stock_qty = stock_qty + ? WHERE product_id = ?',
                                 [returnQty, item.product_id], (err) => err ? rej(err) : res());
                         });
+                        
+                        returnedProductNames.push(`${item.product_name} (x${returnQty})`);
                     }
 
                     // 4. Update sales total
@@ -909,6 +973,7 @@ ipcMain.handle('process-sale-return', async (event, { saleId, items }) => {
 
                     dbModule.db.run('COMMIT', (err) => {
                         if (err) throw err;
+                        dbModule.logActivity(currentUser?.username || 'admin', 'Sale Return', `Processed return for Sale ID: ${saleId}. Products: ${returnedProductNames.join(', ')}. Refund: Rs. ${totalRefund.toFixed(2)}`);
                         resolve({
                             success: true,
                             message: responseMessage,
@@ -1137,7 +1202,7 @@ ipcMain.handle('get-overdue-installments', async () => {
 
 ipcMain.handle('record-installment-payment', async (event, paymentData) => {
     return new Promise((resolve, reject) => {
-        const { installment_id, amount_paid, next_due_date } = paymentData;
+        const { installment_id, amount_paid, payment_method, next_due_date } = paymentData;
 
         if (amount_paid < 0) {
             return reject({ success: false, message: 'Payment amount cannot be negative' });
@@ -1169,8 +1234,8 @@ ipcMain.handle('record-installment-payment', async (event, paymentData) => {
 
                 // Record payment
                 dbModule.db.run(
-                    'INSERT INTO installment_payments (installment_id, amount_paid, remaining_balance_after) VALUES (?, ?, ?)',
-                    [installment_id, amount_paid, new_balance],
+                    'INSERT INTO installment_payments (installment_id, amount_paid, payment_method, remaining_balance_after) VALUES (?, ?, ?, ?)',
+                    [installment_id, amount_paid, payment_method || 'Cash', new_balance],
                     (err) => {
                         if (err) {
                             dbModule.db.run('ROLLBACK');
@@ -1192,7 +1257,8 @@ ipcMain.handle('record-installment-payment', async (event, paymentData) => {
                                         dbModule.db.run('ROLLBACK');
                                         return reject({ success: false, message: err.message });
                                     }
-                                    resolve({ success: true, message: 'Payment recorded successfully', new_balance });
+                                dbModule.logActivity(currentUser?.username || 'admin', 'Record Payment', `Recorded payment of Rs. ${amount_paid} (${payment_method || 'Cash'}) for Installment ID: ${installment_id}. New Balance: Rs. ${new_balance.toFixed(2)}`);
+                                resolve({ success: true, message: 'Payment recorded successfully', new_balance });
                                 });
                             }
                         );
@@ -1221,6 +1287,7 @@ ipcMain.handle('update-installment', async (event, installmentData) => {
                 if (err) {
                     reject({ success: false, message: err.message });
                 } else {
+                    dbModule.logActivity(currentUser?.username || 'admin', 'Update Installment', `Updated installment plan: ${installment_duration} months, Rs. ${monthly_amount}/mo for ID: ${installment_id}`);
                     resolve({ success: true, message: 'Installment plan updated successfully' });
                 }
             }
@@ -1260,6 +1327,7 @@ ipcMain.handle('delete-installment', async (event, installment_id) => {
                                 dbModule.db.run('ROLLBACK');
                                 return reject({ success: false, message: err.message });
                             }
+                            dbModule.logActivity(currentUser?.username || 'admin', 'Delete Installment', `Returned/Completed installment for Sale ID: ${sale_id}. Action: ${action}`);
                             resolve({ success: true, message: 'Installment returned successfully, history preserved.' });
                         });
                     });
@@ -1317,7 +1385,7 @@ ipcMain.handle('get-all-payments', async (event, filters = {}) => {
         }
 
         if (conditions.length > 0) {
-            baseQuery += ' WHERE ' + conditions.join(' AND ');
+            baseQuery += ' AND ' + conditions.join(' AND ');
         }
 
         const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
@@ -1428,13 +1496,19 @@ ipcMain.handle('get-dashboard-stats', async () => {
                         if (err) return reject({ success: false, message: err.message });
                         stats.overdue_count = row.count;
 
-                        // Low stock count (independent of sales)
-                        dbModule.db.get(`SELECT COUNT(*) as count FROM products WHERE stock_qty < min_stock_level`, (err, row) => {
-                            if (err) return reject({ success: false, message: err.message });
-                            stats.low_stock_count = row.count;
+                            // Low stock count (independent of sales)
+                            dbModule.db.get(`SELECT COUNT(*) as count FROM products WHERE stock_qty < min_stock_level`, (err, row) => {
+                                if (err) return reject({ success: false, message: err.message });
+                                stats.low_stock_count = row.count;
 
-                            resolve({ success: true, stats });
-                        });
+                                // 6. Total Customers count
+                                dbModule.db.get(`SELECT COUNT(*) as count FROM customers WHERE is_deleted = 0`, (err, row) => {
+                                    if (err) return reject({ success: false, message: err.message });
+                                    stats.total_customers = row.count;
+
+                                    resolve({ success: true, stats });
+                                });
+                            });
                     });
                 });
             });
@@ -1523,7 +1597,7 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
             LEFT JOIN customers c ON s.customer_id = c.customer_id
             LEFT JOIN installments i ON s.sale_id = i.sale_id
             WHERE DATE(s.sale_date, 'localtime') = DATE(?, 'localtime') AND s.is_deleted = 0
-            ORDER BY s.sale_date DESC
+            ORDER BY s.sale_id DESC
         `;
 
         dbModule.db.all(salesQuery, [targetDate], (err, salesRows) => {
@@ -1533,6 +1607,8 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
             const paymentsQuery = `
                 SELECT 
                     s.sale_id as sale_id,
+                    s.customer_id as customer_id,
+                    s.walkin_id as walkin_id,
                     ip.payment_date as sale_date,
                     ip.amount_paid as total_amount,
                     'Installment Payment' as payment_type,
@@ -1546,7 +1622,7 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
                 JOIN sales s ON i.sale_id = s.sale_id
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 WHERE DATE(ip.payment_date, 'localtime') = DATE(?, 'localtime') AND s.is_deleted = 0
-                ORDER BY ip.payment_date DESC
+                ORDER BY s.sale_id DESC
             `;
 
             dbModule.db.all(paymentsQuery, [targetDate], (err, paymentRows) => {
@@ -1554,7 +1630,7 @@ ipcMain.handle('get-daily-sales-report', async (event, date) => {
 
                 // Combine and sort
                 const combined = [...(salesRows || []), ...(paymentRows || [])];
-                combined.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+                combined.sort((a, b) => b.sale_id - a.sale_id);
                 resolve({ success: true, sales: combined, date: targetDate });
             });
         });
@@ -1574,7 +1650,7 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
             LEFT JOIN customers c ON s.customer_id = c.customer_id
             LEFT JOIN installments i ON s.sale_id = i.sale_id
             WHERE strftime('%Y-%m', s.sale_date, 'localtime') = ? AND s.is_deleted = 0
-            ORDER BY s.sale_date DESC
+            ORDER BY s.sale_id DESC
         `;
 
         dbModule.db.all(salesQuery, [targetMonth], (err, salesRows) => {
@@ -1584,6 +1660,8 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
             const paymentsQuery = `
                 SELECT 
                     s.sale_id as sale_id,
+                    s.customer_id as customer_id,
+                    s.walkin_id as walkin_id,
                     ip.payment_date as sale_date,
                     ip.amount_paid as total_amount,
                     'Installment Payment' as payment_type,
@@ -1597,7 +1675,7 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
                 JOIN sales s ON i.sale_id = s.sale_id
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 WHERE strftime('%Y-%m', ip.payment_date, 'localtime') = ? AND s.is_deleted = 0
-                ORDER BY ip.payment_date DESC
+                ORDER BY s.sale_id DESC
             `;
 
             dbModule.db.all(paymentsQuery, [targetMonth], (err, paymentRows) => {
@@ -1605,7 +1683,7 @@ ipcMain.handle('get-monthly-sales-report', async (event, month) => {
 
                 // Combine and sort
                 const combined = [...(salesRows || []), ...(paymentRows || [])];
-                combined.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+                combined.sort((a, b) => b.sale_id - a.sale_id);
                 resolve({ success: true, sales: combined, month: targetMonth });
             });
         });
@@ -1630,7 +1708,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 LEFT JOIN installments i ON s.sale_id = i.sale_id
                 WHERE DATE(s.sale_date, 'localtime') BETWEEN DATE(?, 'localtime') AND DATE(?, 'localtime') AND s.is_deleted = 0
-                ORDER BY s.sale_date DESC
+                ORDER BY s.sale_id DESC
             `;
 
             dbModule.db.all(salesQuery, [startDate, endDate], (err, salesRows) => {
@@ -1642,6 +1720,8 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                 const paymentsQuery = `
                     SELECT 
                         s.sale_id as sale_id,
+                        s.customer_id as customer_id,
+                        s.walkin_id as walkin_id,
                         ip.payment_date as sale_date,
                         ip.amount_paid as total_amount,
                         'Installment Payment' as payment_type,
@@ -1655,7 +1735,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                     JOIN sales s ON i.sale_id = s.sale_id
                     LEFT JOIN customers c ON s.customer_id = c.customer_id
                     WHERE DATE(ip.payment_date, 'localtime') BETWEEN DATE(?, 'localtime') AND DATE(?, 'localtime') AND s.is_deleted = 0
-                    ORDER BY ip.payment_date DESC
+                    ORDER BY s.sale_id DESC
                 `;
 
                 dbModule.db.all(paymentsQuery, [startDate, endDate], (err, paymentRows) => {
@@ -1665,7 +1745,7 @@ ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
                     }
 
                     const combined = [...(salesRows || []), ...(paymentRows || [])];
-                    combined.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date));
+                    combined.sort((a, b) => b.sale_id - a.sale_id);
                     resolve({ success: true, sales: combined, startDate, endDate });
                 });
             });
@@ -1685,7 +1765,7 @@ ipcMain.handle('get-installment-report', async () => {
             JOIN sales s ON i.sale_id = s.sale_id
             JOIN customers c ON s.customer_id = c.customer_id
             WHERE i.status IN ('Active', 'Overdue') AND s.is_deleted = 0
-            ORDER BY i.next_due_date ASC
+            ORDER BY i.installment_id DESC
         `;
 
         dbModule.db.all(query, (err, rows) => {
@@ -1703,7 +1783,7 @@ ipcMain.handle('get-overdue-report', async () => {
             JOIN sales s ON i.sale_id = s.sale_id
             JOIN customers c ON s.customer_id = c.customer_id
             WHERE (i.status = 'Overdue' OR (i.status = 'Active' AND DATE(i.next_due_date) < DATE('now'))) AND s.is_deleted = 0
-            ORDER BY i.next_due_date ASC
+            ORDER BY i.installment_id DESC
         `;
 
         dbModule.db.all(query, (err, rows) => {

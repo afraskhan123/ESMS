@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld('api', {
     // Utility
     getCategories: () => ipcRenderer.invoke('get-categories'),
     getBrands: () => ipcRenderer.invoke('get-brands'),
+    getActivityLogs: (limit) => ipcRenderer.invoke('get-activity-logs', limit),
+    clearActivityLogs: () => ipcRenderer.invoke('clear-activity-logs'),
+    log: (level, message) => ipcRenderer.invoke('log', level, message),
 
     // Database Management
     exportDatabase: () => ipcRenderer.invoke('export-database'),

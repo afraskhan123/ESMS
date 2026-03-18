@@ -188,6 +188,9 @@ async function createTables() {
     if (!salesCols.some(c => c.name === 'walkin_name')) {
         await dbRun("ALTER TABLE sales ADD COLUMN walkin_name TEXT");
     }
+    if (!salesCols.some(c => c.name === 'walkin_id')) {
+        await dbRun("ALTER TABLE sales ADD COLUMN walkin_id INTEGER");
+    }
 
     // 5. Sale Items Table
     await dbRun(`CREATE TABLE IF NOT EXISTS sale_items (
@@ -254,11 +257,25 @@ async function createTables() {
         installment_id INTEGER NOT NULL,
         payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
         amount_paid REAL NOT NULL,
+        payment_method TEXT DEFAULT 'Cash',
         remaining_balance_after REAL NOT NULL,
         FOREIGN KEY (installment_id) REFERENCES installments(installment_id) ON DELETE CASCADE
     )`);
+    const paymentCols = await dbAll("PRAGMA table_info(installment_payments)");
+    if (!paymentCols.some(c => c.name === 'payment_method')) {
+        await dbRun("ALTER TABLE installment_payments ADD COLUMN payment_method TEXT DEFAULT 'Cash'");
+    }
 
-    // 8. Indexes
+    // 8. Activity Logs Table
+    await dbRun(`CREATE TABLE IF NOT EXISTS activity_logs (
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 9. Indexes
     await dbRun('CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id)');
     await dbRun('CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date)');
     await dbRun('CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id)');
@@ -281,11 +298,38 @@ function getDatabase() {
     return db;
 }
 
+// Log user activity
+async function logActivity(username, action, details) {
+    if (!db) return;
+    try {
+        const sql = 'INSERT INTO activity_logs (username, action, details) VALUES (?, ?, ?)';
+        await dbRun(sql, [username, action, details]);
+        
+        // Automatic cleanup: Keep only the latest 5000 logs to prevent DB bloat
+        // We run this occasionally (roughly 1 in 10 times) to avoid overhead
+        if (Math.random() < 0.1) {
+            await dbRun(`
+                DELETE FROM activity_logs 
+                WHERE log_id NOT IN (
+                    SELECT log_id FROM activity_logs 
+                    ORDER BY log_id DESC LIMIT 3000
+                )
+            `);
+        }
+    } catch (error) {
+        console.error('Failed to log activity:', error);
+    }
+}
+
 // Export functions
 module.exports = {
     getDatabase,
     initializeDatabase,
     hashPassword,
+    logActivity,
+    dbGet,
+    dbAll,
+    dbRun,
     get db() {
         return db;
     }

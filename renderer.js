@@ -2,6 +2,42 @@
 // GLOBAL STATE & UTILITIES
 // ═══════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════
+// LOGGING SYSTEM (PIPE CONSOLE TO ELECTRON-LOG)
+// ═══════════════════════════════════════════════════════════
+const originalConsole = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug
+};
+
+console.log = (...args) => {
+    originalConsole.log(...args);
+    window.api.log('info', args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+};
+
+console.info = (...args) => {
+    originalConsole.info(...args);
+    window.api.log('info', args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+};
+
+console.warn = (...args) => {
+    originalConsole.warn(...args);
+    window.api.log('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+};
+
+console.error = (...args) => {
+    originalConsole.error(...args);
+    window.api.log('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+};
+
+console.debug = (...args) => {
+    originalConsole.debug(...args);
+    window.api.log('debug', args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+};
+
 let currentUser = null;
 let allProducts = [];
 let allCustomers = [];
@@ -15,13 +51,13 @@ let saleItemCounter = 0;
 let saleCart = [];
 let cartItemCounter = 0;
 let currentPaymentsPage = 1;
-const paymentsPageSize = 10;
+const paymentsPageSize = 20;
 
 let currentInstallmentsPage = 1;
-const installmentsPageSize = 5;
+const installmentsPageSize = 20;
 
 let currentCustomersPage = 1;
-const customersPageSize = 10;
+const customersPageSize = 20;
 
 // Utility: Debounce function to prevent rapid firing of heavy operations
 function debounce(func, wait) {
@@ -291,6 +327,8 @@ async function loadDashboard() {
         const statsResult = await window.api.getDashboardStats();
         if (statsResult.success) {
             const stats = statsResult.stats;
+            console.log('Dashboard stats:', stats); 
+
 
             const statsHTML = `
                 <div class="stat-card hover-effect" onclick="navigateToSpecificReport('daily')" style="cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;" title="View Daily Sales Report">
@@ -317,6 +355,11 @@ async function loadDashboard() {
                     <div class="stat-icon"><i class="fas fa-boxes"></i></div>
                     <div class="stat-value">${stats.low_stock_count}</div>
                     <div class="stat-label">Low Stock Items</div>
+                </div>
+                <div class="stat-card hover-effect" onclick="navigateTab('customers')" style="cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;" title="View Customer Management">
+                    <div class="stat-icon" style="color: var(--primary);"><i class="fas fa-users"></i></div>
+                    <div class="stat-value">${stats.total_customers || 0}</div>
+                    <div class="stat-label">Total Customers</div>
                 </div>
             `;
 
@@ -444,9 +487,9 @@ function renderProductsTable(products) {
                 <button class="btn btn-sm btn-primary" onclick="editProduct(${product.product_id})">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.product_id})">
+                <!-- <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.product_id})">
                     <i class="fas fa-trash"></i>
-                </button>
+                </button> -->
             </td>
         </tr>
     `}).join('');
@@ -771,8 +814,9 @@ function renderSaleCustomerDropdownList(customers) {
         const item = document.createElement('div');
         item.className = 'custom-dropdown-item';
         item.innerHTML = `
-            <div style="display: flex; flex-direction: column;">
-                <span class="custom-dropdown-item-text" style="font-weight: 600;">${customer.full_name}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span class="custom-dropdown-item-text" style="font-weight: 600; color: #1e293b;">${customer.full_name}</span>
+                <span style="font-size: 0.7rem; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-family: monospace; white-space: nowrap; margin-left: 10px;">${customer.id_number || 'No ID'}</span>
             </div>
         `;
         item.addEventListener('click', () => {
@@ -952,6 +996,12 @@ async function loadCustomers() {
                 showNotification('error', `Duplicate ID Numbers found: ${dupMsg}. Please clean these up for security.`);
             }
         }
+
+            // Update Total Count in Bottom Footer
+            const totalCountBottom = document.getElementById('customer-total-count-bottom');
+            if (totalCountBottom) {
+                totalCountBottom.textContent = allCustomers ? allCustomers.length : 0;
+            }
     } catch (error) {
         console.error('Error loading customers:', error);
     }
@@ -1675,8 +1725,13 @@ document.getElementById('sale-form').addEventListener('submit', async (e) => {
     }
 
     const customerIdVal = document.getElementById('sale-customer').value;
-    const customerId = customerIdVal === "0" ? null : parseInt(customerIdVal);
+    const customerId = !customerIdVal || customerIdVal === "0" ? null : parseInt(customerIdVal);
     const walkinName = customerId === null ? document.getElementById('walkin-name').value : null;
+
+    if (!customerIdVal && !walkinName) {
+        showNotification('error', 'Please select a Customer or Walk-in.');
+        return;
+    }
     const paymentType = document.getElementById('payment-type').value;
 
     // Installments are not allowed for walk-in customers
@@ -1693,11 +1748,14 @@ document.getElementById('sale-form').addEventListener('submit', async (e) => {
         return;
     }
 
+    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+
     const saleData = {
         customer_id: customerId,
         walkin_name: walkinName,
         items,
-        payment_type: paymentType
+        payment_type: paymentType,
+        total_amount: totalAmount
     };
 
     // Add installment data if applicable
@@ -1715,7 +1773,7 @@ document.getElementById('sale-form').addEventListener('submit', async (e) => {
             return;
         }
 
-        const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+        const total = totalAmount;
 
         if (downPayment > total) {
             showNotification('error', 'Down payment cannot be greater than total amount');
@@ -1842,6 +1900,7 @@ const INVOICE_LANG = {
         totalRefundAmount: "Total Refund",
         totalRefunded: "TOTAL REFUNDED:",
         currency: "Rs.",
+        paymentMethod: "Payment Method",
         noteTitle: "نوٹ:",
         note1: "بجلی کی تاروں میں خرابی، بجلی کی کمی یا زیادتی غلط اور بلاضرورت مشین کو استعمال کرنے سے پرہیز کریں۔",
         note2: "برف کے خانے میں برتن اکھاڑتے ہوئے چھری یا کسی لوہے کی چیز کا استعمال نہ کریں۔",
@@ -1890,6 +1949,7 @@ const INVOICE_LANG = {
         totalRefundAmount: "کل واپسی رقم",
         totalRefunded: "کل ادا شدہ رقم:",
         currency: "روپے",
+        paymentMethod: "ادائیگی کا طریقہ",
         noteTitle: "نوٹ:",
         note1: "بجلی کی تاروں میں خرابی، بجلی کی کمی یا زیادتی غلط اور بلاضرورت مشین کو استعمال کرنے سے پرہیز کریں۔",
         note2: "برف کے خانے میں برتن اکھاڑتے ہوئے چھری یا کسی لوہے کی چیز کا استعمال نہ کریں۔",
@@ -1983,6 +2043,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                             <thead>
                                 <tr>
                                     <th style="text-align: ${textAlign};">${isUrdu ? 'تاریخ' : 'Date'}</th>
+                                    <th style="text-align: center;">${t.paymentMethod}</th>
                                     <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'رقم ادا کی' : 'Amount Paid'}</th>
                                     <th style="text-align: ${isUrdu ? 'left' : 'right'};">${isUrdu ? 'بقیہ رقم' : 'Remaining Balance'}</th>
                                 </tr>
@@ -1991,6 +2052,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                                 ${sale.payments.map(payment => `
                                     <tr>
                                         <td style="text-align: ${textAlign};">${formatDate(payment.payment_date)}</td>
+                                        <td style="text-align: center;">${payment.payment_method || (isUrdu ? 'نقد' : 'Cash')}</td>
                                         <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.amount_paid)}</td>
                                         <td style="text-align: ${isUrdu ? 'left' : 'right'};">${t.currency} ${formatCurrency(payment.remaining_balance_after)}</td>
                                     </tr>
@@ -2100,7 +2162,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                     </div>
                     ` : ''}
 
-                    <div class="invoice-footer" style="margin-top: 2rem; font-size: 0.85rem; text-align: justify; direction: rtl; font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif; line-height: 1.5;">
+                    <!-- <div class="invoice-footer" style="margin-top: 2rem; font-size: 0.85rem; text-align: justify; direction: rtl; font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif; line-height: 1.5;">
                         <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 0.5rem; text-align: right;">${t.noteTitle}</div>
                         <ol style="padding-right: 1rem; margin-bottom: 0; text-align: right;">
                             <li>${t.note1}</li>
@@ -2111,7 +2173,7 @@ async function viewInvoice(saleId, currentBalance = null) {
                             <li>${t.note6}</li>
                             <li>${t.note7}</li>
                         </ol>
-                    </div>
+                    </div> -->
                 </div>
             `;
 
@@ -2617,6 +2679,7 @@ async function printInstallmentHistory(installmentId) {
                                 <tr>
                                     <th style="text-align: left;">Date</th>
                                     <th style="text-align: right;">Amount Paid</th>
+                                    <th style="text-align: center;">Payment Method</th>
                                     <th style="text-align: right;">Balance After</th>
                                 </tr>
                             </thead>
@@ -2626,7 +2689,7 @@ async function printInstallmentHistory(installmentId) {
             if (payments.length === 0) {
                 statementHTML += `
                     <tr>
-                        <td colspan="3" style="text-align: center;">No payments recorded yet.</td>
+                        <td colspan="4" style="text-align: center;">No payments recorded yet.</td>
                     </tr>
                 `;
             } else {
@@ -2635,6 +2698,7 @@ async function printInstallmentHistory(installmentId) {
                         <tr>
                             <td>${formatDate(payment.payment_date)}</td>
                             <td style="text-align: right;">Rs. ${formatCurrency(payment.amount_paid)}</td>
+                            <td style="text-align: center;">${payment.payment_method || 'Cash'}</td>
                             <td style="text-align: right;">Rs. ${formatCurrency(payment.remaining_balance_after)}</td>
                         </tr>
                     `;
@@ -2646,13 +2710,13 @@ async function printInstallmentHistory(installmentId) {
                             <tfoot>
                                 <tr>
                                     <td style="text-align: right; font-weight: bold;">Current Remaining Balance:</td>
-                                    <td colspan="2" style="text-align: right; font-weight: bold;">Rs. ${formatCurrency(installment.remaining_balance)}</td>
+                                    <td colspan="3" style="text-align: right; font-weight: bold;">Rs. ${formatCurrency(installment.remaining_balance)}</td>
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
 
-                    <div class="invoice-footer" style="direction: rtl; font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif; line-height: 1.5; margin-top: 2rem; font-size: 0.85rem; text-align: justify;">
+                    <!-- <div class="invoice-footer" style="direction: rtl; font-family: 'Jameel Noori Nastaleeq', 'Urdu Typesetting', serif; line-height: 1.5; margin-top: 2rem; font-size: 0.85rem; text-align: justify;">
                         <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 0.5rem;">نوٹ:</div>
                         <ol style="padding-right: 1rem; margin-bottom: 0;">
                             <li>بجلی کی تاروں میں خرابی، بجلی کی کمی یا زیادتی غلط اور بلاضرورت مشین کو استعمال کرنے سے پرہیز کریں۔</li>
@@ -2663,7 +2727,7 @@ async function printInstallmentHistory(installmentId) {
                             <li>مکینک سے براہ راست مرمت کرانے کی صورت میں فرم ہذا پر کسی قسم کی ذمہ داری عائد نہ ہوگی، فروخت شدہ مال نہ واپس ہوگا اور نہ تبدیل۔</li>
                             <li>وارنٹی میں موٹر کمپریسر ایک بار تبدیل ہوگا۔</li>
                         </ol>
-                    </div>
+                    </div> -->
                 </div>
             `;
 
@@ -2692,13 +2756,14 @@ async function viewPaymentHistory(installmentId, openModalFlag = true) {
             if (payments.length === 0) {
                 historyHTML = '<p class="text-muted" style="text-align: center; padding: 1rem;">No payment history found</p>';
             } else {
-                historyHTML = '<div class="table-container" style="max-height: 200px; overflow-y: auto;"><table><thead><tr><th>Date</th><th>Amount Paid</th><th>Balance After</th></tr></thead><tbody>';
+                historyHTML = '<div class="table-container" style="max-height: 200px; overflow-y: auto;"><table><thead><tr><th>Date</th><th>Amount Paid</th><th>Payment Method</th><th>Balance After</th></tr></thead><tbody>';
 
                 payments.forEach(payment => {
                     historyHTML += `
                         <tr>
                             <td>${formatDate(payment.payment_date)}</td>
                             <td>Rs. ${formatCurrency(payment.amount_paid)}</td>
+                            <td>${payment.payment_method || 'Cash'}</td>
                             <td>Rs. ${formatCurrency(payment.remaining_balance_after)}</td>
                         </tr>
                     `;
@@ -2744,6 +2809,7 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
 
     const installmentId = parseInt(document.getElementById('payment-installment-id').value);
     const amountPaid = parseFloat(document.getElementById('payment-amount').value);
+    const paymentMethod = document.getElementById('payment-method').value;
     const nextDueDate = document.getElementById('payment-next-due').value;
 
     if (amountPaid < 0) {
@@ -2762,6 +2828,7 @@ document.getElementById('payment-form').addEventListener('submit', async (e) => 
         const result = await window.api.recordInstallmentPayment({ 
             installment_id: installmentId, 
             amount_paid: amountPaid,
+            payment_method: paymentMethod,
             next_due_date: nextDueDate
         });
         if (result.success) {
@@ -2894,6 +2961,7 @@ async function loadPaymentsTab(filters = {}) {
         };
 
         const result = await window.api.getAllPayments(pFilters);
+        console.log('Payments filter:', pFilters, 'Result:', result);
         if (result.success) {
             renderPaymentsTable(result.payments);
             renderPaymentsPagination(result.totalCount, result.page, result.pageSize, filters);
@@ -2959,7 +3027,7 @@ function renderPaymentsTable(payments) {
     const tbody = document.getElementById('payments-tbody');
 
     if (payments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No payments found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No payments found</td></tr>';
         return;
     }
 
@@ -2971,6 +3039,7 @@ function renderPaymentsTable(payments) {
             <td>Rs. ${formatCurrency(p.total_amount)}</td>
             <td class="text-success fw-bold">Rs. ${formatCurrency(p.amount_paid)}</td>
             <td>Rs. ${formatCurrency(p.remaining_balance_after)}</td>
+            <td><span class="badge badge-info">${p.payment_method || 'Cash'}</span></td>
             <td>
                 <button class="btn btn-sm btn-primary" onclick="viewPaymentHistory(${p.installment_id})">
                     <i class="fas fa-history"></i> History
@@ -2989,9 +3058,81 @@ document.getElementById('payment-filter-btn').addEventListener('click', () => {
     loadPaymentsTab({ search, startDate, endDate });
 });
 
+// Real-time search for payments
+document.getElementById('payment-search').addEventListener('input', debounce((e) => {
+    const search = e.target.value;
+    const startDate = document.getElementById('payment-start-date').value;
+    const endDate = document.getElementById('payment-end-date').value;
+
+    currentPaymentsPage = 1; // Reset to page 1 on new search
+    loadPaymentsTab({ search, startDate, endDate });
+}, 300));
+
 // ═══════════════════════════════════════════════════════════
 // REPORTS
 // ═══════════════════════════════════════════════════════════
+
+async function generateActivityLogReport() {
+    try {
+        const limit = parseInt(document.getElementById('activity-log-limit').value) || 20;
+        lastReportContext = { type: 'activity', args: [limit] };
+        const result = await window.api.getActivityLogs(limit);
+        
+        if (result.success) {
+            const logs = result.logs;
+            
+            let html = `
+                <div class="printable-report" style="color: #000;">
+                    <h2 class="text-center" style="margin-bottom: 2rem; color: var(--text-primary); font-weight: 800; letter-spacing: 0.5px;">User Activity Logs</h2>
+                    
+                    <div class="report-summary-card">
+                        <div class="report-summary-item">
+                            <div class="report-summary-label">Logs Shown</div>
+                            <div class="report-summary-value primary">${logs.length}</div>
+                        </div>
+                        <div class="report-summary-item">
+                            <div class="report-summary-label">Current User</div>
+                            <div class="report-summary-value success">${currentUser ? currentUser.username : 'Admin'}</div>
+                        </div>
+                    </div>
+
+                    <div class="report-table-container">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 20%;">Timestamp</th>
+                                    <th style="width: 15%;">User</th>
+                                    <th style="width: 20%;">Action</th>
+                                    <th style="width: 45%;">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${logs.map(log => `
+                                    <tr>
+                                        <td>${formatDate(log.timestamp)}</td>
+                                        <td style="font-weight: 600; color: var(--primary);">${log.username}</td>
+                                        <td><span class="report-badge ${log.action.includes('Failed') || log.action.includes('Delete') ? 'report-badge-danger' : 'report-badge-primary'}">${log.action}</span></td>
+                                        <td style="font-size: 0.9em; color: #475569;">${log.details || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                                ${logs.length === 0 ? '<tr><td colspan="4" class="text-center text-muted">No activity logs found</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            showReport('Activity Logs', html);
+        }
+    } catch (error) {
+        console.error('Error generating activity report:', error);
+        showNotification('error', 'Error fetching activity logs');
+    }
+}
+
+// Add event listener for the generate button
+document.getElementById('generate-activity-report-btn')?.addEventListener('click', generateActivityLogReport);
+
 
 async function generateDailyReport(date) {
     try {
@@ -3044,18 +3185,30 @@ async function generateDailyReport(date) {
                             </thead>
                             <tbody>
                                 ${(() => {
-                    const groupedSales = groupByKey(sales, 'customer_name');
-                    return Object.keys(groupedSales).sort().map(customerName => {
-                        const customerSales = groupedSales[customerName];
+                    // Use a unique grouping key to prevent merging walk-in and registered customers with same name
+                    const groupedSales = {};
+                    sales.forEach(s => {
+                        const key = (s.customer_id || 0) + '|' + (s.walkin_id || '') + '|' + s.customer_name;
+                        if (!groupedSales[key]) groupedSales[key] = [];
+                        groupedSales[key].push(s);
+                    });
+
+                    return Object.keys(groupedSales).sort((a, b) => {
+                        const maxIdA = Math.max(...groupedSales[a].map(s => s.sale_id));
+                        const maxIdB = Math.max(...groupedSales[b].map(s => s.sale_id));
+                        return maxIdB - maxIdA;
+                    }).map(groupKey => {
+                        const customerSales = groupedSales[groupKey];
+                        const customerName = groupKey.split('|')[2];
                         
                         // Sort so Installment comes before Installment Payment for the same date
                         customerSales.sort((a, b) => {
-                            if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                            if (a.sale_id !== b.sale_id) return b.sale_id - a.sale_id;
                             if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
                             if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
                             const dateA = new Date(a.sale_date).getTime();
                             const dateB = new Date(b.sale_date).getTime();
-                            return dateA - dateB;
+                            return dateB - dateA;
                         });
 
                         const customerTotal = customerSales.reduce((sum, s) => {
@@ -3069,9 +3222,10 @@ async function generateDailyReport(date) {
                                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                                 <div>
                                                     <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    ${(!customerSales[0].customer_id || customerSales[0].customer_id === '0') && !customerSales.some(s => s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? '<span class="report-badge report-badge-info" style="margin-left:8px; font-size:0.6rem;">Direct Purchase</span>' : ''}
                                                 </div>
                                                 <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
-                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || (customerSales[0].walkin_id ? 'W-' + customerSales[0].walkin_id : 'N/A')}
                                                 </div>
                                             </div>
                                         </td>
@@ -3186,18 +3340,30 @@ async function generateMonthlyReport() {
                             </thead>
                             <tbody>
                                 ${(() => {
-                    const groupedSales = groupByKey(sales, 'customer_name');
-                    return Object.keys(groupedSales).sort().map(customerName => {
-                        const customerSales = groupedSales[customerName];
+                    // Use a unique grouping key to prevent merging walk-in and registered customers with same name
+                    const groupedSales = {};
+                    sales.forEach(s => {
+                        const key = (s.customer_id || 0) + '|' + (s.walkin_id || '') + '|' + s.customer_name;
+                        if (!groupedSales[key]) groupedSales[key] = [];
+                        groupedSales[key].push(s);
+                    });
+
+                    return Object.keys(groupedSales).sort((a, b) => {
+                        const maxIdA = Math.max(...groupedSales[a].map(s => s.sale_id));
+                        const maxIdB = Math.max(...groupedSales[b].map(s => s.sale_id));
+                        return maxIdB - maxIdA;
+                    }).map(groupKey => {
+                        const customerSales = groupedSales[groupKey];
+                        const customerName = groupKey.split('|')[2];
                         
                         // Sort so Installment comes before Installment Payment for the same date
                         customerSales.sort((a, b) => {
-                            if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                            if (a.sale_id !== b.sale_id) return b.sale_id - a.sale_id;
                             if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
                             if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
                             const dateA = new Date(a.sale_date).getTime();
                             const dateB = new Date(b.sale_date).getTime();
-                            return dateA - dateB;
+                            return dateB - dateA;
                         });
 
                         const customerTotal = customerSales.reduce((sum, s) => {
@@ -3211,9 +3377,10 @@ async function generateMonthlyReport() {
                                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                                 <div>
                                                     <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    ${(!customerSales[0].customer_id || customerSales[0].customer_id === '0') && !customerSales.some(s => s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? '<span class="report-badge report-badge-info" style="margin-left:8px; font-size:0.6rem;">Direct Purchase</span>' : ''}
                                                 </div>
                                                 <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
-                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || (customerSales[0].walkin_id ? 'W-' + customerSales[0].walkin_id : 'N/A')}
                                                 </div>
                                             </div>
                                         </td>
@@ -3326,9 +3493,21 @@ async function generateInstallmentReport() {
                             </thead>
                             <tbody>
                                 ${(() => {
-                    const groupedInstallments = groupByKey(installments, 'customer_name');
-                    return Object.keys(groupedInstallments).sort().map(customerName => {
-                        const customerInstalls = groupedInstallments[customerName];
+                    // Use a unique grouping key to prevent merging walk-in and registered customers with same name
+                    const groupedInstallments = {};
+                    installments.forEach(i => {
+                        const key = (i.customer_id || 0) + '|' + (i.walkin_id || '') + '|' + i.customer_name;
+                        if (!groupedInstallments[key]) groupedInstallments[key] = [];
+                        groupedInstallments[key].push(i);
+                    });
+
+                    return Object.keys(groupedInstallments).sort((a, b) => {
+                        const nameA = a.split('|')[2].toLowerCase();
+                        const nameB = b.split('|')[2].toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    }).map(groupKey => {
+                        const customerInstalls = groupedInstallments[groupKey];
+                        const customerName = groupKey.split('|')[2];
                         const customerRemaining = customerInstalls.reduce((sum, i) => sum + i.remaining_balance, 0);
 
                         let groupHtml = `
@@ -3337,11 +3516,12 @@ async function generateInstallmentReport() {
                                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                                 <div>
                                                     <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    ${(!customerInstalls[0].customer_id || customerInstalls[0].customer_id === '0') && !customerInstalls.some(i => i.payment_type === 'Installment' || i.payment_type === 'Installment Payment') ? '<span class="report-badge report-badge-info" style="margin-left:8px; font-size:0.6rem;">Direct Purchase</span>' : ''}
                                                     <span style="font-size: 0.8em; font-weight: normal; color: #64748b; margin-left: 10px;">(Phone: ${customerInstalls[0].phone || '-'})</span>
                                                 </div>
                                                 <div style="display: flex; align-items: center; gap: 20px;">
                                                     <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
-                                                        <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerInstalls[0].id_number || 'N/A'}
+                                                        <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerInstalls[0].id_number || (customerInstalls[0].walkin_id ? 'W-' + customerInstalls[0].walkin_id : 'N/A')}
                                                     </div>
                                                     <div style="font-weight: bold; color: var(--warning);">
                                                         <span style="font-size: 0.8rem; color: #64748b; margin-right: 5px;">Remaining:</span>Rs. ${formatCurrency(customerRemaining)}
@@ -3433,18 +3613,31 @@ async function generateOverdueReport() {
                             </thead>
                             <tbody>
                                 ${(() => {
-                    const grouped = groupByKey(installments, 'customer_name');
-                    return Object.keys(grouped).sort().map(customerName => {
-                        const items = grouped[customerName];
+                    // Use a unique grouping key to prevent merging walk-in and registered customers with same name
+                    const grouped = {};
+                    installments.forEach(i => {
+                        const key = (i.customer_id || 0) + '|' + (i.walkin_id || '') + '|' + i.customer_name;
+                        if (!grouped[key]) grouped[key] = [];
+                        grouped[key].push(i);
+                    });
+
+                    return Object.keys(grouped).sort((a, b) => {
+                        const nameA = a.split('|')[2].toLowerCase();
+                        const nameB = b.split('|')[2].toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    }).map(groupKey => {
+                        const items = grouped[groupKey];
+                        const customerName = groupKey.split('|')[2];
                         let groupRows = `
                                     <tr class="report-group-header" style="background-color: #f1f5f9; border-top: 2px solid #cbd5e1;">
                                         <td colspan="5" style="font-weight: bold; color: var(--primary); padding: 8px 15px;">
                                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                                 <div>
                                                     <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    ${(!items[0].customer_id || items[0].customer_id === '0') && !items.some(s => s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? '<span class="report-badge report-badge-info" style="margin-left:8px; font-size:0.6rem;">Direct Purchase</span>' : ''}
                                                 </div>
                                                 <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
-                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${items[0].id_number || 'N/A'}
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${items[0].id_number || (items[0].walkin_id ? 'W-' + items[0].walkin_id : 'N/A')}
                                                 </div>
                                             </div>
                                         </td>
@@ -3759,7 +3952,48 @@ document.getElementById('report-next-page').addEventListener('click', () => {
 function getFilteredRows() {
     const query = (document.getElementById('report-search').value || '').toLowerCase().trim();
     if (!query) return reportPagination.allRows;
-    return reportPagination.allRows.filter(row => row.textContent.toLowerCase().includes(query));
+
+    // Detect if we are using grouping (headers)
+    const rows = reportPagination.allRows;
+    const headers = rows.filter(row => row.classList.contains('report-group-header'));
+    const isGrouped = headers.length > 0;
+
+    if (!isGrouped) {
+        return rows.filter(row => row.textContent.toLowerCase().includes(query));
+    }
+
+    // For grouped reports: If a group match, keep header + all its children
+    const filteredRows = [];
+    let currentGroupMatches = false;
+    let currentGroupRows = [];
+
+    rows.forEach(row => {
+        if (row.classList.contains('report-group-header')) {
+            // New group started - finalize previous group
+            if (currentGroupMatches) {
+                filteredRows.push(...currentGroupRows);
+            }
+            
+            // Check if THIS header matches
+            currentGroupMatches = row.textContent.toLowerCase().includes(query);
+            currentGroupRows = [row];
+        } else {
+            // This is a transaction row. 
+            // 1. If header already matched, the group matches.
+            // 2. Otherwise, if this row matches, the WHOLE group (including header) should be shown.
+            currentGroupRows.push(row);
+            if (row.textContent.toLowerCase().includes(query)) {
+                currentGroupMatches = true;
+            }
+        }
+    });
+
+    // Finalize last group
+    if (currentGroupMatches) {
+        filteredRows.push(...currentGroupRows);
+    }
+
+    return filteredRows;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3918,19 +4152,31 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
                             </thead>
                             <tbody>
                                 ${sales.length === 0 ? '<tr><td colspan="6" class="text-center text-muted" style="padding: 2rem;">No sales found in this date range</td></tr>' : (() => {
-                const groupedSales = groupByKey(sales, 'customer_name');
-                return Object.keys(groupedSales).sort().map(customerName => {
-                    const customerSales = groupedSales[customerName];
+                // Use a unique grouping key to prevent merging walk-in and registered customers with same name
+                const groupedSales = {};
+                sales.forEach(s => {
+                    const key = (s.customer_id || 0) + '|' + (s.walkin_id || '') + '|' + s.customer_name;
+                    if (!groupedSales[key]) groupedSales[key] = [];
+                    groupedSales[key].push(s);
+                });
+
+                return Object.keys(groupedSales).sort((a, b) => {
+                        const maxIdA = Math.max(...groupedSales[a].map(s => s.sale_id));
+                        const maxIdB = Math.max(...groupedSales[b].map(s => s.sale_id));
+                        return maxIdB - maxIdA;
+                    }).map(groupKey => {
+                    const customerSales = groupedSales[groupKey];
+                    const customerName = groupKey.split('|')[2];
                     
                     // Sort so Installment comes before Installment Payment for the same date
                     customerSales.sort((a, b) => {
-                        if (a.sale_id !== b.sale_id) return a.sale_id - b.sale_id;
+                            if (a.sale_id !== b.sale_id) return b.sale_id - a.sale_id;
                         if (a.payment_type === 'Installment' && b.payment_type !== 'Installment') return -1;
                         if (b.payment_type === 'Installment' && a.payment_type !== 'Installment') return 1;
                         const dateA = new Date(a.sale_date).getTime();
                         const dateB = new Date(b.sale_date).getTime();
-                        return dateA - dateB;
-                    });
+                        return dateB - dateA;
+                        });
 
                     const customerTotal = customerSales.reduce((sum, s) => {
                         const amt = (s.payment_type === 'Installment' || s.payment_type === 'Installment Payment') ? (s.down_payment || 0) : s.total_amount;
@@ -3943,9 +4189,10 @@ async function generateDateRangeReport(startDate, endDate, title = 'Sales Report
                                             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                                 <div>
                                                     <i class="fas fa-user-circle" style="margin-right: 8px;"></i>${customerName}
+                                                    ${!customerSales[0].customer_id || customerSales[0].customer_id === '0' ? '<span class="report-badge report-badge-info" style="margin-left:8px; font-size:0.6rem;">Direct Purchase</span>' : ''}
                                                 </div>
                                                 <div style="font-size: 0.85em; color: #64748b; font-weight: normal;">
-                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || 'N/A'}
+                                                    <i class="fas fa-id-card" style="margin-right: 4px;"></i>CNIC: ${customerSales[0].id_number || (customerSales[0].walkin_id ? 'W-' + customerSales[0].walkin_id : 'N/A')}
                                                 </div>
                                             </div>
                                         </td>
@@ -4682,3 +4929,4 @@ function appConfirm(message, title = 'Are you sure?') {
         modal.classList.add('active');
     });
 }
+

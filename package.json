@@ -53,6 +53,7 @@
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
     "@fortawesome/fontawesome-free": "^7.2.0",
+    "electron-log": "^5.4.3",
     "sqlite3": "^5.1.7"
   }
 }

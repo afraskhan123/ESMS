@@ -487,9 +487,9 @@ function renderProductsTable(products) {
                 <button class="btn btn-sm btn-primary" onclick="editProduct(${product.product_id})">
                     <i class="fas fa-edit"></i>
                 </button>
-                <!-- <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.product_id})">
+                <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.product_id})">
                     <i class="fas fa-trash"></i>
-                </button> -->
+                </button>
             </td>
         </tr>
     `}).join('');
@@ -906,6 +906,7 @@ document.getElementById('product-form').addEventListener('submit', async (e) => 
         if (result.success) {
             closeModal('product-modal');
             loadProducts();
+            loadAlerts(); // Refresh low stock alerts
             showNotification('success', result.message);
         } else {
             showNotification('error', result.message);
@@ -960,6 +961,7 @@ async function deleteProduct(productId) {
         const result = await window.api.deleteProduct(productId);
         if (result.success) {
             loadProducts();
+            loadAlerts(); // Refresh low stock alerts
             showNotification('success', result.message);
         } else {
             showNotification('error', result.message);
@@ -4453,9 +4455,23 @@ function updateNotificationUI(alerts) {
         if (activeAlerts.length == 0) {
             dashboardAlertsContainer.innerHTML = '<p class="text-muted">No active alerts</p>';
         } else {
-            dashboardAlertsContainer.innerHTML = activeAlerts.map(alert => `
+            // Pagination settings
+            const itemsPerPage = 5;
+            const totalPages = Math.ceil(activeAlerts.length / itemsPerPage);
+            
+            // Default to page 1 if not set
+            if (!window.dashboardAlertsPage) window.dashboardAlertsPage = 1;
+            
+            // Adjust current page if it's out of bounds (e.g., after clearing enough alerts)
+            if (window.dashboardAlertsPage > totalPages) window.dashboardAlertsPage = Math.max(1, totalPages);
+            
+            const currentPage = window.dashboardAlertsPage;
+            const startIdx = (currentPage - 1) * itemsPerPage;
+            const currentAlerts = activeAlerts.slice(startIdx, startIdx + itemsPerPage);
+
+            let html = currentAlerts.map(alert => `
                 <div class="alert alert-${alert.severity}" 
-                     style="cursor: pointer; transition: transform 0.2s;" 
+                     style="cursor: pointer; transition: transform 0.2s; margin-bottom: 10px;" 
                      onclick="navigateFromAlert('${alert.type}', '${alert.target}')"
                      onmouseover="this.style.transform='translateX(5px)'"
                      onmouseout="this.style.transform='translateX(0)'">
@@ -4466,6 +4482,32 @@ function updateNotificationUI(alerts) {
                     </div>
                 </div>
             `).join('');
+
+            // Add pagination controls if there's more than one page
+            if (totalPages > 1) {
+                html += `
+                    <div class="dashboard-alerts-pagination" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 15px;">
+                        <button class="btn btn-sm btn-light" onclick="changeDashboardAlertsPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                            <i class="fas fa-chevron-left"></i> Prev
+                        </button>
+                        <span style="font-size: 0.85rem; color: #64748b;">Page ${currentPage} of ${totalPages} (Total: ${activeAlerts.length})</span>
+                        <button class="btn btn-sm btn-light" onclick="changeDashboardAlertsPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // Expose pagination change function to global scope
+                if (!window.changeDashboardAlertsPage) {
+                    window.changeDashboardAlertsPage = (newPage) => {
+                        window.dashboardAlertsPage = newPage;
+                        // Reload alerts to refresh the dashboard widget immediately
+                        loadAlerts();
+                    };
+                }
+            }
+            
+            dashboardAlertsContainer.innerHTML = html;
         }
     }
 }
@@ -4597,22 +4639,35 @@ if (markAllReadBtn) {
 if (clearAllBtn) {
     clearAllBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const notifications = []; // Assuming 'notifications' refers to active alerts
-        if (notifications.length === 0) return;
-        const isConfirmed = await appConfirm('Are you sure you want to clear all notifications?');
-        if (!isConfirmed) return;
-
+        
         try {
             const result = await window.api.getDashboardAlerts();
             if (result.success) {
+                // Determine active notifications (those not already deleted)
+                const activeAlerts = result.alerts.filter(alert => !deletedNotificationIds.has(generateAlertId(alert)));
+                
+                if (activeAlerts.length === 0) {
+                    showNotification('info', 'No active notifications to clear');
+                    return;
+                }
+
+                const isConfirmed = await appConfirm('Are you sure you want to clear all notifications?');
+                if (!isConfirmed) return;
+
                 result.alerts.forEach(alert => {
                     deletedNotificationIds.add(generateAlertId(alert));
                 });
                 saveNotificationState();
                 updateNotificationUI(result.alerts);
+                
+                // If we're on dashboard, reset the alerts pagination
+                if (window.dashboardAlertsPage) window.dashboardAlertsPage = 1;
+                
+                showNotification('success', 'All notifications cleared');
             }
         } catch (error) {
             console.error('Error clearing all notifications:', error);
+            showNotification('error', 'Failed to clear notifications');
         }
     });
 }

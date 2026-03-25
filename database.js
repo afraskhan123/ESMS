@@ -8,16 +8,22 @@ const { app } = require('electron');
 // when the app is installed as a .exe. __dirname points inside a read-only
 // ASAR archive in production builds.
 function getDbPath() {
+    // In development (not packaged), use the local project directory
+    if (!app.isPackaged) {
+        const localPath = path.join(__dirname, 'esms.db');
+        console.log('Development mode: Using local database at:', localPath);
+        return localPath;
+    }
+
+    // In production (packaged), use the writable userData directory
     const userDataPath = app.getPath('userData');
     const dbFile = path.join(userDataPath, 'esms.db');
 
-    // On first run, copy the bundled seed DB so the default admin user is available.
-    // In production (.exe), electron-builder places extraResources at process.resourcesPath.
-    // In development, fall back to __dirname.
+    // On first run in production, copy the bundled seed DB
     if (!fs.existsSync(dbFile)) {
-        const bundledDb = app.isPackaged
-            ? path.join(process.resourcesPath, 'esms.db')
-            : path.join(__dirname, 'esms.db');
+        // In production (.exe), electron-builder places extraResources at process.resourcesPath.
+        const bundledDb = path.join(process.resourcesPath, 'esms.db');
+        
         if (fs.existsSync(bundledDb)) {
             try {
                 fs.copyFileSync(bundledDb, dbFile);

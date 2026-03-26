@@ -256,6 +256,9 @@ async function createTables() {
     if (!installmentCols.some(c => c.name === 'guarantor_address')) {
         await dbRun("ALTER TABLE installments ADD COLUMN guarantor_address TEXT");
     }
+    if (!installmentCols.some(c => c.name === 'is_deleted')) {
+        await dbRun("ALTER TABLE installments ADD COLUMN is_deleted INTEGER DEFAULT 0");
+    }
 
     // 7. Installment Payments Table
     await dbRun(`CREATE TABLE IF NOT EXISTS installment_payments (

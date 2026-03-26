@@ -2912,7 +2912,15 @@ async function deleteInstallment(installmentId) {
         return;
     }
 
-    const isConfirmed = await appConfirm('Are you sure you want to delete this installment plan? This action cannot be undone and will also delete all payment history associated with this plan.', 'Delete Installment?');
+    let confirmMsg = 'Are you sure you want to delete this installment plan? This action cannot be undone and will also delete all payment history associated with this plan.';
+    let confirmTitle = 'Delete Installment?';
+
+    if (installment && installment.status === 'Completed') {
+        confirmMsg = 'Are you sure you want to remove this completed installment plan from the list? The payment history and original sale will remain in your records.';
+        confirmTitle = 'Remove Completed Plan?';
+    }
+
+    const isConfirmed = await appConfirm(confirmMsg, confirmTitle);
     if (!isConfirmed) return;
 
     try {

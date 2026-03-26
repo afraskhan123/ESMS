@@ -34,7 +34,7 @@ function registerInstallmentHandlers(context) {
                     FROM installments i
                     JOIN sales s ON i.sale_id = s.sale_id
                     LEFT JOIN customers c ON s.customer_id = c.customer_id
-                    WHERE s.is_deleted = 0
+                    WHERE s.is_deleted = 0 AND i.is_deleted = 0
                 `;
                 const params = [];
 
@@ -200,35 +200,55 @@ function registerInstallmentHandlers(context) {
             dbModule.db.serialize(() => {
                 dbModule.db.run('BEGIN TRANSACTION');
 
-                dbModule.db.get('SELECT sale_id FROM installments WHERE installment_id = ?', [installment_id], (err, row) => {
+                dbModule.db.get('SELECT sale_id, status FROM installments WHERE installment_id = ?', [installment_id], (err, row) => {
                     if (err || !row) {
                         dbModule.db.run('ROLLBACK');
                         return reject({ success: false, message: err ? err.message : 'Installment not found' });
                     }
                     const sale_id = row.sale_id;
+                    const status = row.status;
 
-                    dbModule.db.run('UPDATE installments SET status = "Completed", remaining_balance = 0 WHERE installment_id = ?', [installment_id], (err) => {
-                        if (err) {
-                            dbModule.db.run('ROLLBACK');
-                            return reject({ success: false, message: err.message });
-                        }
-
-                        dbModule.db.run('UPDATE sales SET status = "Returned" WHERE sale_id = ?', [sale_id], (err) => {
+                    if (status === 'Completed') {
+                        // For completed installments, just soft-delete from list
+                        dbModule.db.run('UPDATE installments SET is_deleted = 1 WHERE installment_id = ?', [installment_id], (err) => {
                             if (err) {
                                 dbModule.db.run('ROLLBACK');
                                 return reject({ success: false, message: err.message });
                             }
-
                             dbModule.db.run('COMMIT', (err) => {
                                 if (err) {
                                     dbModule.db.run('ROLLBACK');
                                     return reject({ success: false, message: err.message });
                                 }
-                                dbModule.logActivity(getCurrentUser()?.username || 'admin', 'Delete Installment', `Returned/Completed installment for Sale ID: ${sale_id}`);
-                                resolve({ success: true, message: 'Installment returned successfully, history preserved.' });
+                                dbModule.logActivity(getCurrentUser()?.username || 'admin', 'Delete Installment', `Soft-deleted completed installment for Sale ID: ${sale_id}`);
+                                resolve({ success: true, message: 'Installment hidden from list successfully.' });
                             });
                         });
-                    });
+                    } else {
+                        // For non-completed installments, follow return logic
+                        dbModule.db.run('UPDATE installments SET status = "Completed", remaining_balance = 0 WHERE installment_id = ?', [installment_id], (err) => {
+                            if (err) {
+                                dbModule.db.run('ROLLBACK');
+                                return reject({ success: false, message: err.message });
+                            }
+
+                            dbModule.db.run('UPDATE sales SET status = "Returned" WHERE sale_id = ?', [sale_id], (err) => {
+                                if (err) {
+                                    dbModule.db.run('ROLLBACK');
+                                    return reject({ success: false, message: err.message });
+                                }
+
+                                dbModule.db.run('COMMIT', (err) => {
+                                    if (err) {
+                                        dbModule.db.run('ROLLBACK');
+                                        return reject({ success: false, message: err.message });
+                                    }
+                                    dbModule.logActivity(getCurrentUser()?.username || 'admin', 'Delete Installment', `Returned/Completed installment for Sale ID: ${sale_id}`);
+                                    resolve({ success: true, message: 'Installment returned successfully, history preserved.' });
+                                });
+                            });
+                        });
+                    }
                 });
             });
         });

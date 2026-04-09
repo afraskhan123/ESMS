@@ -323,10 +323,18 @@
                                 style="padding: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 1rem; background: #f8fafc;">
                                 <div class="form-row">
                                     <div class="form-group" style="flex: 2;">
-                                        <label for="current-sale-product" class="required">Product</label>
-                                        <select class="form-control" id="current-sale-product">
-                                            <option value="">Select Product</option>
-                                        </select>
+                                        <label for="sale-product-input" class="required">Product</label>
+                                        <div class="custom-dropdown" id="sale-product-dropdown">
+                                            <div class="custom-dropdown-select" id="sale-product-display">
+                                                <input type="text" id="sale-product-input"
+                                                    placeholder="Select or search product" autocomplete="off">
+                                                <i class="fas fa-chevron-down"></i>
+                                            </div>
+                                            <div class="custom-dropdown-list" id="sale-product-list">
+                                                <!-- Products will be populated here by JS -->
+                                            </div>
+                                            <input type="hidden" id="current-sale-product">
+                                        </div>
                                     </div>
                                     <div class="form-group">
                                         <label for="current-sale-quantity" class="required">Quantity</label>

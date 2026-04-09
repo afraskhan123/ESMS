@@ -427,17 +427,7 @@ async function loadProducts(filters = {}) {
             if (brandsChanged) renderDropdownList('brand');
 
             // Populate current-sale-product
-            const productSelect = document.getElementById('current-sale-product');
-            if (productSelect) {
-                const currentVal = productSelect.value;
-                productSelect.innerHTML = '<option value="">Select Product</option>' +
-                    allProducts.map(p => {
-                        return `<option value="${p.product_id}" data-price="${p.selling_price}" data-purchase-price="${p.purchase_price}" data-name="${p.name}" data-stock="${p.stock_qty}">${p.name}</option>`;
-                    }).join('');
-                if (allProducts.some(p => p.product_id == currentVal)) {
-                    productSelect.value = currentVal;
-                }
-            }
+            renderSaleProductDropdownList(allProducts);
         }
     } catch (error) {
         console.error('Error loading products:', error);
@@ -759,6 +749,7 @@ function selectDropdownItem(type, val) {
 // Call initialization
 initCustomDropdowns();
 initSalesCustomerDropdown();
+initSalesProductDropdown();
 
 function initSalesCustomerDropdown() {
     const dropdown = document.getElementById('sale-customer-dropdown');
@@ -846,6 +837,93 @@ function selectSaleCustomer(customer) {
     }
 
     // Trigger internal change logic
+    const event = new Event('change', { bubbles: true });
+    hiddenInput.dispatchEvent(event);
+}
+
+function initSalesProductDropdown() {
+    const dropdown = document.getElementById('sale-product-dropdown');
+    const input = document.getElementById('sale-product-input');
+    const display = document.getElementById('sale-product-display');
+
+    if (!dropdown || !input || !display) return;
+
+    display.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('active');
+        if (dropdown.classList.contains('active')) {
+            input.focus();
+        }
+    });
+
+    input.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const filtered = allProducts.filter(p => 
+            p.name.toLowerCase().includes(searchTerm) || 
+            (p.category && p.category.toLowerCase().includes(searchTerm)) ||
+            (p.brand && p.brand.toLowerCase().includes(searchTerm))
+        );
+        renderSaleProductDropdownList(filtered);
+        if (!dropdown.classList.contains('active')) dropdown.classList.add('active');
+    });
+
+    input.addEventListener('focus', () => {
+        if (!dropdown.classList.contains('active')) {
+            dropdown.classList.add('active');
+            renderSaleProductDropdownList(allProducts);
+        }
+    });
+}
+
+function renderSaleProductDropdownList(products) {
+    const list = document.getElementById('sale-product-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    // Sort items with available stock first, then alphabetically
+    const sortedProducts = [...products].sort((a, b) => {
+        const aHasStock = a.stock_qty > 0;
+        const bHasStock = b.stock_qty > 0;
+        if (aHasStock !== bHasStock) {
+            return bHasStock ? 1 : -1; // Stock items first
+        }
+        return a.name.localeCompare(b.name);
+    });
+
+    sortedProducts.forEach(product => {
+        const item = document.createElement('div');
+        item.className = 'custom-dropdown-item';
+        
+        // Add visual cue for out of stock without being intrusive
+        const stockStyle = product.stock_qty > 0 ? 'color: #1e293b;' : 'color: #94a3b8; text-decoration: line-through;';
+        
+        item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span class="custom-dropdown-item-text" style="font-weight: 600; ${stockStyle}">${product.name}</span>
+            </div>
+        `;
+        item.addEventListener('click', () => {
+            selectSaleProduct(product);
+            document.getElementById('sale-product-dropdown').classList.remove('active');
+        });
+        list.appendChild(item);
+    });
+}
+
+function selectSaleProduct(product) {
+    const input = document.getElementById('sale-product-input');
+    const hiddenInput = document.getElementById('current-sale-product');
+
+    if (product) {
+        input.value = product.name;
+        hiddenInput.value = product.product_id;
+    } else {
+        input.value = '';
+        hiddenInput.value = '';
+    }
+
+    // Trigger calculation
     const event = new Event('change', { bubbles: true });
     hiddenInput.dispatchEvent(event);
 }
@@ -1449,7 +1527,7 @@ function calculateCurrentSaleItemSubtotal() {
     if (productSelect.value && quantityInput.value) {
         const productId = parseInt(productSelect.value);
         const product = allProducts.find(p => p.product_id === productId);
-        const price = parseFloat(productSelect.selectedOptions[0].dataset.price);
+        const price = product ? product.selling_price : 0;
         const quantity = parseInt(quantityInput.value);
 
         const cartQty = saleCart.filter(item => item.product_id === productId).reduce((sum, item) => sum + item.quantity, 0);
@@ -1491,6 +1569,8 @@ document.getElementById('clear-cart-item-btn').addEventListener('click', () => {
     // If this was triggered from an edit (item was removed from cart), we need to put it back.
     // Since we can't recover the original item easily after splice, we just clear the form.
     productSelect.value = '';
+    const saleProductInput = document.getElementById('sale-product-input');
+    if (saleProductInput) saleProductInput.value = '';
     quantityInput.value = '1';
     subtotalInput.value = 'Rs. 0.00';
     subtotalInput.dataset.custom = 'false';
@@ -1514,9 +1594,9 @@ document.getElementById('add-to-cart-btn').addEventListener('click', () => {
     const productId = parseInt(productSelect.value);
     const product = allProducts.find(p => p.product_id === productId);
     const quantity = parseInt(quantityInput.value);
-    const price = parseFloat(productSelect.selectedOptions[0].dataset.price);
-    const purchasePrice = parseFloat(productSelect.selectedOptions[0].dataset.purchasePrice) || 0;
-    const name = productSelect.selectedOptions[0].dataset.name;
+    const price = product ? product.selling_price : 0;
+    const purchasePrice = product ? product.purchase_price : 0;
+    const name = product ? product.name : '';
 
     const parsedSubtotal = parseFloat(subtotalInput.value.replace('Rs. ', '').replace(/,/g, ''));
     if (isNaN(parsedSubtotal) || parsedSubtotal < 0) {
@@ -1554,6 +1634,8 @@ document.getElementById('add-to-cart-btn').addEventListener('click', () => {
     });
 
     productSelect.value = '';
+    const saleProductInput = document.getElementById('sale-product-input');
+    if (saleProductInput) saleProductInput.value = '';
     quantityInput.value = '1';
     subtotalInput.value = 'Rs. 0.00';
     subtotalInput.dataset.custom = 'false';
@@ -1637,6 +1719,8 @@ window.editCartItem = function (id) {
 
     // Convert product_id to string to ensure the option is properly selected
     productSelect.value = String(item.product_id);
+    const saleProductInput = document.getElementById('sale-product-input');
+    if (saleProductInput) saleProductInput.value = item.product_name;
     quantityInput.value = item.quantity;
 
     // Set custom dataset BEFORE setting the value, so the value displays correctly
@@ -1814,6 +1898,7 @@ document.getElementById('sale-form').addEventListener('submit', async (e) => {
             cartItemCounter = 0;
             renderSaleCart();
             document.getElementById('current-sale-product').value = '';
+            if (document.getElementById('sale-product-input')) document.getElementById('sale-product-input').value = '';
             document.getElementById('current-sale-quantity').value = '1';
             document.getElementById('current-sale-subtotal').value = 'Rs. 0.00';
             document.getElementById('current-sale-subtotal').dataset.custom = 'false';
@@ -1847,6 +1932,7 @@ document.getElementById('clear-sale-btn').addEventListener('click', () => {
     cartItemCounter = 0;
     renderSaleCart();
     document.getElementById('current-sale-product').value = '';
+    if (document.getElementById('sale-product-input')) document.getElementById('sale-product-input').value = '';
     document.getElementById('current-sale-quantity').value = '1';
     document.getElementById('current-sale-subtotal').value = 'Rs. 0.00';
     document.getElementById('current-sale-subtotal').dataset.custom = 'false';
@@ -3960,8 +4046,35 @@ document.getElementById('report-next-page').addEventListener('click', () => {
 });
 
 function getFilteredRows() {
-    const query = (document.getElementById('report-search').value || '').toLowerCase().trim();
+    const rawQuery = document.getElementById('report-search').value || '';
+    const query = rawQuery.toLowerCase().trim();
     if (!query) return reportPagination.allRows;
+
+    // Check if user is explicitly searching by "Inv #"
+    let isInvoiceSearch = false;
+    let invoiceQuery = "";
+    
+    const invMatch = query.match(/^(?:inv(?:oice)?\s*#?:?\s*)(.*)/);
+    if (invMatch) {
+        isInvoiceSearch = true;
+        invoiceQuery = invMatch[1].trim();
+        // In the table, invoice numbers are usually formatted as "#123"
+        if (!invoiceQuery.startsWith('#') && invoiceQuery.length > 0) {
+            invoiceQuery = '#' + invoiceQuery;
+        }
+    }
+
+    const checkRowMatch = (row) => {
+        if (isInvoiceSearch) {
+            if (!invoiceQuery) return true; // If they just typed "inv #", let it match or show all
+            return Array.from(row.cells).some(cell => {
+                // Check if the cell text contains the invoice query (e.g. "#123")
+                // And we strictly match to prevent general overall text matching
+                return cell.textContent.toLowerCase().includes(invoiceQuery);
+            });
+        }
+        return row.textContent.toLowerCase().includes(query);
+    };
 
     // Detect if we are using grouping (headers)
     const rows = reportPagination.allRows;
@@ -3969,10 +4082,10 @@ function getFilteredRows() {
     const isGrouped = headers.length > 0;
 
     if (!isGrouped) {
-        return rows.filter(row => row.textContent.toLowerCase().includes(query));
+        return rows.filter(row => checkRowMatch(row));
     }
 
-    // For grouped reports: If a group match, keep header + all its children
+    // For grouped reports: If a group match, keep header + all its children. Otherwise keep header + matching children.
     const filteredRows = [];
     let currentGroupMatches = false;
     let currentGroupRows = [];
@@ -3980,26 +4093,25 @@ function getFilteredRows() {
     rows.forEach(row => {
         if (row.classList.contains('report-group-header')) {
             // New group started - finalize previous group
-            if (currentGroupMatches) {
+            if (currentGroupMatches || currentGroupRows.length > 1) {
                 filteredRows.push(...currentGroupRows);
             }
             
             // Check if THIS header matches
-            currentGroupMatches = row.textContent.toLowerCase().includes(query);
+            currentGroupMatches = checkRowMatch(row);
             currentGroupRows = [row];
         } else {
             // This is a transaction row. 
-            // 1. If header already matched, the group matches.
-            // 2. Otherwise, if this row matches, the WHOLE group (including header) should be shown.
-            currentGroupRows.push(row);
-            if (row.textContent.toLowerCase().includes(query)) {
-                currentGroupMatches = true;
+            // 1. If header already matched, the group matches -> include it
+            // 2. Otherwise, if this row matches -> include it
+            if (currentGroupMatches || checkRowMatch(row)) {
+                currentGroupRows.push(row);
             }
         }
     });
 
     // Finalize last group
-    if (currentGroupMatches) {
+    if (currentGroupMatches || currentGroupRows.length > 1) {
         filteredRows.push(...currentGroupRows);
     }
 

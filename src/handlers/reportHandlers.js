@@ -2,229 +2,212 @@ function registerReportHandlers(context) {
     const { ipcMain, dbModule } = context;
 
     ipcMain.handle('get-daily-sales-report', async (event, date) => {
-        return new Promise((resolve, reject) => {
+        try {
             const targetDate = date || new Date().toISOString().split('T')[0];
 
             const salesQuery = `
                 SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
-                (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM sales s
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 LEFT JOIN installments i ON s.sale_id = i.sale_id
-                WHERE DATE(s.sale_date, 'localtime') = DATE(?, 'localtime') AND s.is_deleted = 0
+                WHERE DATE(s.sale_date) = DATE(?) AND s.is_deleted = 0
                 ORDER BY s.sale_id DESC
             `;
 
-            dbModule.db.all(salesQuery, [targetDate], (err, salesRows) => {
-                if (err) return reject({ success: false, message: err.message });
+            const paymentsQuery = `
+                SELECT 
+                    s.sale_id as sale_id,
+                    s.customer_id as customer_id,
+                    s.walkin_id as walkin_id,
+                    ip.payment_date as sale_date,
+                    ip.amount_paid as total_amount,
+                    'Installment Payment' as payment_type,
+                    COALESCE(c.full_name, s.walkin_name) as customer_name,
+                    c.id_number,
+                    0 as return_count,
+                    ip.amount_paid as down_payment,
+                    (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                FROM installment_payments ip
+                JOIN installments i ON ip.installment_id = i.installment_id
+                JOIN sales s ON i.sale_id = s.sale_id
+                LEFT JOIN customers c ON s.customer_id = c.customer_id
+                WHERE DATE(ip.payment_date) = DATE(?) AND s.is_deleted = 0
+                ORDER BY s.sale_id DESC
+            `;
 
-                const paymentsQuery = `
-                    SELECT 
-                        s.sale_id as sale_id,
-                        s.customer_id as customer_id,
-                        s.walkin_id as walkin_id,
-                        ip.payment_date as sale_date,
-                        ip.amount_paid as total_amount,
-                        'Installment Payment' as payment_type,
-                        COALESCE(c.full_name, s.walkin_name) as customer_name,
-                        c.id_number,
-                        0 as return_count,
-                        ip.amount_paid as down_payment,
-                        (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
-                    FROM installment_payments ip
-                    JOIN installments i ON ip.installment_id = i.installment_id
-                    JOIN sales s ON i.sale_id = s.sale_id
-                    LEFT JOIN customers c ON s.customer_id = c.customer_id
-                    WHERE DATE(ip.payment_date, 'localtime') = DATE(?, 'localtime') AND s.is_deleted = 0
-                    ORDER BY s.sale_id DESC
-                `;
+            const [salesRows, paymentRows] = await Promise.all([
+                dbModule.dbAll(salesQuery, [targetDate]),
+                dbModule.dbAll(paymentsQuery, [targetDate])
+            ]);
 
-                dbModule.db.all(paymentsQuery, [targetDate], (err, paymentRows) => {
-                    if (err) return reject({ success: false, message: err.message });
-
-                    const combined = [...(salesRows || []), ...(paymentRows || [])];
-                    combined.sort((a, b) => b.sale_id - a.sale_id);
-                    resolve({ success: true, sales: combined, date: targetDate });
-                });
-            });
-        });
+            const combined = [...(salesRows || []), ...(paymentRows || [])];
+            combined.sort((a, b) => b.sale_id - a.sale_id);
+            return { success: true, sales: combined, date: targetDate };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('get-monthly-sales-report', async (event, month) => {
-        return new Promise((resolve, reject) => {
+        try {
             const targetMonth = month || new Date().toISOString().slice(0, 7);
 
             const salesQuery = `
                 SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
-                (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
                 FROM sales s
                 LEFT JOIN customers c ON s.customer_id = c.customer_id
                 LEFT JOIN installments i ON s.sale_id = i.sale_id
-                WHERE strftime('%Y-%m', s.sale_date, 'localtime') = ? AND s.is_deleted = 0
+                WHERE DATE_FORMAT(s.sale_date, '%Y-%m') = ? AND s.is_deleted = 0
                 ORDER BY s.sale_id DESC
             `;
 
-            dbModule.db.all(salesQuery, [targetMonth], (err, salesRows) => {
-                if (err) return reject({ success: false, message: err.message });
+            const paymentsQuery = `
+                SELECT 
+                    s.sale_id as sale_id,
+                    s.customer_id as customer_id,
+                    s.walkin_id as walkin_id,
+                    ip.payment_date as sale_date,
+                    ip.amount_paid as total_amount,
+                    'Installment Payment' as payment_type,
+                    COALESCE(c.full_name, s.walkin_name) as customer_name,
+                    c.id_number,
+                    0 as return_count,
+                    ip.amount_paid as down_payment,
+                    (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                FROM installment_payments ip
+                JOIN installments i ON ip.installment_id = i.installment_id
+                JOIN sales s ON i.sale_id = s.sale_id
+                LEFT JOIN customers c ON s.customer_id = c.customer_id
+                WHERE DATE_FORMAT(ip.payment_date, '%Y-%m') = ? AND s.is_deleted = 0
+                ORDER BY s.sale_id DESC
+            `;
 
-                const paymentsQuery = `
-                    SELECT 
-                        s.sale_id as sale_id,
-                        s.customer_id as customer_id,
-                        s.walkin_id as walkin_id,
-                        ip.payment_date as sale_date,
-                        ip.amount_paid as total_amount,
-                        'Installment Payment' as payment_type,
-                        COALESCE(c.full_name, s.walkin_name) as customer_name,
-                        c.id_number,
-                        0 as return_count,
-                        ip.amount_paid as down_payment,
-                        (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
-                    FROM installment_payments ip
-                    JOIN installments i ON ip.installment_id = i.installment_id
-                    JOIN sales s ON i.sale_id = s.sale_id
-                    LEFT JOIN customers c ON s.customer_id = c.customer_id
-                    WHERE strftime('%Y-%m', ip.payment_date, 'localtime') = ? AND s.is_deleted = 0
-                    ORDER BY s.sale_id DESC
-                `;
+            const [salesRows, paymentRows] = await Promise.all([
+                dbModule.dbAll(salesQuery, [targetMonth]),
+                dbModule.dbAll(paymentsQuery, [targetMonth])
+            ]);
 
-                dbModule.db.all(paymentsQuery, [targetMonth], (err, paymentRows) => {
-                    if (err) return reject({ success: false, message: err.message });
-
-                    const combined = [...(salesRows || []), ...(paymentRows || [])];
-                    combined.sort((a, b) => b.sale_id - a.sale_id);
-                    resolve({ success: true, sales: combined, month: targetMonth });
-                });
-            });
-        });
+            const combined = [...(salesRows || []), ...(paymentRows || [])];
+            combined.sort((a, b) => b.sale_id - a.sale_id);
+            return { success: true, sales: combined, month: targetMonth };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('get-sales-report-by-date-range', async (event, params) => {
-        return new Promise((resolve) => {
-            try {
-                const startDate = params && params.startDate;
-                const endDate = params && params.endDate;
+        try {
+            const startDate = params && params.startDate;
+            const endDate = params && params.endDate;
 
-                if (!startDate || !endDate) {
-                    return resolve({ success: false, message: 'Start date and end date are required' });
-                }
-
-                const salesQuery = `
-                    SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
-                    (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
-                    (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
-                    FROM sales s
-                    LEFT JOIN customers c ON s.customer_id = c.customer_id
-                    LEFT JOIN installments i ON s.sale_id = i.sale_id
-                    WHERE DATE(s.sale_date, 'localtime') BETWEEN DATE(?, 'localtime') AND DATE(?, 'localtime') AND s.is_deleted = 0
-                    ORDER BY s.sale_id DESC
-                `;
-
-                dbModule.db.all(salesQuery, [startDate, endDate], (err, salesRows) => {
-                    if (err) {
-                        console.error('Date range report error:', err);
-                        return resolve({ success: false, message: err.message });
-                    }
-
-                    const paymentsQuery = `
-                        SELECT 
-                            s.sale_id as sale_id,
-                            s.customer_id as customer_id,
-                            s.walkin_id as walkin_id,
-                            ip.payment_date as sale_date,
-                            ip.amount_paid as total_amount,
-                            'Installment Payment' as payment_type,
-                            COALESCE(c.full_name, s.walkin_name) as customer_name,
-                            c.id_number,
-                            0 as return_count,
-                            ip.amount_paid as down_payment,
-                            (SELECT GROUP_CONCAT(product_name, ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
-                        FROM installment_payments ip
-                        JOIN installments i ON ip.installment_id = i.installment_id
-                        JOIN sales s ON i.sale_id = s.sale_id
-                        LEFT JOIN customers c ON s.customer_id = c.customer_id
-                        WHERE DATE(ip.payment_date, 'localtime') BETWEEN DATE(?, 'localtime') AND DATE(?, 'localtime') AND s.is_deleted = 0
-                        ORDER BY s.sale_id DESC
-                    `;
-
-                    dbModule.db.all(paymentsQuery, [startDate, endDate], (err, paymentRows) => {
-                        if (err) {
-                            console.error('Date range report error:', err);
-                            return resolve({ success: false, message: err.message });
-                        }
-
-                        const combined = [...(salesRows || []), ...(paymentRows || [])];
-                        combined.sort((a, b) => b.sale_id - a.sale_id);
-                        resolve({ success: true, sales: combined, startDate, endDate });
-                    });
-                });
-            } catch (error) {
-                console.error('Date range report exception:', error);
-                resolve({ success: false, message: error.message });
+            if (!startDate || !endDate) {
+                return { success: false, message: 'Start date and end date are required' };
             }
-        });
+
+            const salesQuery = `
+                SELECT s.*, COALESCE(c.full_name, s.walkin_name) as customer_name, c.id_number, i.down_payment,
+                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count,
+                (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.customer_id
+                LEFT JOIN installments i ON s.sale_id = i.sale_id
+                WHERE DATE(s.sale_date) BETWEEN DATE(?) AND DATE(?) AND s.is_deleted = 0
+                ORDER BY s.sale_id DESC
+            `;
+
+            const paymentsQuery = `
+                SELECT 
+                    s.sale_id as sale_id,
+                    s.customer_id as customer_id,
+                    s.walkin_id as walkin_id,
+                    ip.payment_date as sale_date,
+                    ip.amount_paid as total_amount,
+                    'Installment Payment' as payment_type,
+                    COALESCE(c.full_name, s.walkin_name) as customer_name,
+                    c.id_number,
+                    0 as return_count,
+                    ip.amount_paid as down_payment,
+                    (SELECT GROUP_CONCAT(product_name SEPARATOR ', ') FROM sale_items WHERE sale_id = s.sale_id) as product_names
+                FROM installment_payments ip
+                JOIN installments i ON ip.installment_id = i.installment_id
+                JOIN sales s ON i.sale_id = s.sale_id
+                LEFT JOIN customers c ON s.customer_id = c.customer_id
+                WHERE DATE(ip.payment_date) BETWEEN DATE(?) AND DATE(?) AND s.is_deleted = 0
+                ORDER BY s.sale_id DESC
+            `;
+
+            const [salesRows, paymentRows] = await Promise.all([
+                dbModule.dbAll(salesQuery, [startDate, endDate]),
+                dbModule.dbAll(paymentsQuery, [startDate, endDate])
+            ]);
+
+            const combined = [...(salesRows || []), ...(paymentRows || [])];
+            combined.sort((a, b) => b.sale_id - a.sale_id);
+            return { success: true, sales: combined, startDate, endDate };
+        } catch (error) {
+            return { success: false, message: error.message };
+        }
     });
 
     ipcMain.handle('get-installment-report', async () => {
-        return new Promise((resolve, reject) => {
+        try {
             const query = `
                 SELECT i.*, c.full_name as customer_name, c.id_number, c.phone,
                 (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id AND si.returned_qty > 0) as return_count
                 FROM installments i
                 JOIN sales s ON i.sale_id = s.sale_id
                 JOIN customers c ON s.customer_id = c.customer_id
-                WHERE i.status IN ('Active', 'Overdue') AND s.is_deleted = 0
+                WHERE i.status IN ('Active', 'Overdue') AND s.is_deleted = 0 AND i.is_deleted = 0
                 ORDER BY i.installment_id DESC
             `;
-
-            dbModule.db.all(query, (err, rows) => {
-                if (err) return reject({ success: false, message: err.message });
-                resolve({ success: true, installments: rows });
-            });
-        });
+            const rows = await dbModule.dbAll(query);
+            return { success: true, installments: rows };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('get-overdue-report', async () => {
-        return new Promise((resolve, reject) => {
+        try {
             const query = `
                 SELECT i.*, c.full_name as customer_name, c.id_number, c.phone, c.address
                 FROM installments i
                 JOIN sales s ON i.sale_id = s.sale_id
                 JOIN customers c ON s.customer_id = c.customer_id
-                WHERE (i.status = 'Overdue' OR (i.status = 'Active' AND DATE(i.next_due_date) < DATE('now'))) AND s.is_deleted = 0
+                WHERE (i.status = 'Overdue' OR (i.status = 'Active' AND i.next_due_date < CURDATE())) AND s.is_deleted = 0 AND i.is_deleted = 0
                 ORDER BY i.installment_id DESC
             `;
-
-            dbModule.db.all(query, (err, rows) => {
-                if (err) return reject({ success: false, message: err.message });
-                resolve({ success: true, installments: rows });
-            });
-        });
+            const rows = await dbModule.dbAll(query);
+            return { success: true, installments: rows };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('get-inventory-report', async () => {
-        return new Promise((resolve, reject) => {
+        try {
             const query = `SELECT * FROM products ORDER BY category, name`;
+            const rows = await dbModule.dbAll(query);
 
-            dbModule.db.all(query, (err, rows) => {
-                if (err) return reject({ success: false, message: err.message });
+            const totalValue = rows.reduce((sum, p) => sum + (Number(p.purchase_price || 0) * Number(p.stock_qty || 0)), 0);
+            const totalStock = rows.reduce((sum, p) => sum + Number(p.stock_qty || 0), 0);
 
-                const totalValue = rows.reduce((sum, p) => sum + (p.purchase_price * p.stock_qty), 0);
-                const totalStock = rows.reduce((sum, p) => sum + p.stock_qty, 0);
-
-                resolve({
-                    success: true,
-                    products: rows,
-                    summary: { totalValue, totalStock }
-                });
-            });
-        });
+            return {
+                success: true,
+                products: rows,
+                summary: { totalValue, totalStock }
+            };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('get-profit-loss-report', async (event, { startDate, endDate }) => {
-        return new Promise((resolve, reject) => {
+        try {
             let query = `
                 SELECT 
                     s.sale_id,
@@ -243,26 +226,26 @@ function registerReportHandlers(context) {
                 query += ` WHERE s.is_deleted = 0`;
             }
 
-            query += ` GROUP BY s.sale_id`;
+            query += ` GROUP BY s.sale_id, i.total_amount, s.total_amount`;
 
-            dbModule.db.all(query, params, (err, rows) => {
-                if (err) return reject({ success: false, message: err.message });
+            const rows = await dbModule.dbAll(query, params);
 
-                const report = rows.reduce((acc, row) => {
-                    acc.revenue += row.final_revenue;
-                    acc.cost += row.total_cost;
-                    return acc;
-                }, { revenue: 0, cost: 0 });
+            const report = rows.reduce((acc, row) => {
+                acc.revenue += Number(row.final_revenue || 0);
+                acc.cost += Number(row.total_cost || 0);
+                return acc;
+            }, { revenue: 0, cost: 0 });
 
-                resolve({
-                    success: true,
-                    revenue: report.revenue,
-                    cost: report.cost,
-                    profit: report.revenue - report.cost,
-                    period: { startDate, endDate }
-                });
-            });
-        });
+            return {
+                success: true,
+                revenue: report.revenue,
+                cost: report.cost,
+                profit: report.revenue - report.cost,
+                period: { startDate, endDate }
+            };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 }
 

@@ -66,9 +66,21 @@ contextBridge.exposeInMainWorld('api', {
     clearActivityLogs: () => ipcRenderer.invoke('clear-activity-logs'),
     log: (level, message) => ipcRenderer.invoke('log', level, message),
 
-    // Database Management
+    // Database Management & Centralized MySQL Configuration
     exportDatabase: () => ipcRenderer.invoke('export-database'),
-    importDatabase: () => ipcRenderer.invoke('import-database')
+    importDatabase: () => ipcRenderer.invoke('import-database'),
+    getDbConfig: () => ipcRenderer.invoke('get-db-config'),
+    saveDbConfig: (config) => ipcRenderer.invoke('save-db-config', config),
+    testDbConnection: (config) => ipcRenderer.invoke('test-db-connection', config),
+    migrateSqliteFile: () => ipcRenderer.invoke('migrate-sqlite-file'),
+
+    // Cloud & Google Drive Backups
+    getBackupSettings: () => ipcRenderer.invoke('get-backup-settings'),
+    saveBackupSettings: (settings) => ipcRenderer.invoke('save-backup-settings', settings),
+    selectBackupFolder: () => ipcRenderer.invoke('select-backup-folder'),
+    performBackup: () => ipcRenderer.invoke('perform-backup'),
+    listBackups: () => ipcRenderer.invoke('list-backups'),
+    restoreBackupFile: (filePath) => ipcRenderer.invoke('restore-backup-file', filePath)
 });
 
 console.log('Preload script loaded - API exposed to renderer');

@@ -76,6 +76,20 @@ app.whenReady().then(async () => {
 
     createWindow();
 
+    // Trigger Automated Cloud / Daily Backup in the background
+    setTimeout(() => {
+        if (registerUtilityHandlers.runAutoBackupIfNeeded) {
+            registerUtilityHandlers.runAutoBackupIfNeeded(dbModule, app, log);
+        }
+    }, 3000);
+
+    // Periodic check every 4 hours while app stays running
+    setInterval(() => {
+        if (registerUtilityHandlers.runAutoBackupIfNeeded) {
+            registerUtilityHandlers.runAutoBackupIfNeeded(dbModule, app, log);
+        }
+    }, 4 * 60 * 60 * 1000);
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();

@@ -793,26 +793,145 @@
                                 </div>
                             </div>
 
-                            <!-- Data Management Section -->
-                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0;">
+                            <!-- Centralized MySQL Database Configuration Section -->
+                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0; margin-bottom: 20px;">
                                 <div class="card-header" style="background: #f8fafc;">
-                                    <h3><i class="fas fa-database"></i> Data Management</h3>
+                                    <h3><i class="fas fa-server"></i> MySQL Centralized Database Settings</h3>
                                 </div>
                                 <div class="p-2">
-                                    <p style="margin-bottom: 15px; color: #64748b;">Manage your application data. CREATE
-                                        BACKUPS REGULARLY.</p>
-                                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                        <button class="btn btn-success" id="export-db-btn" style="flex: 1;">
-                                            <i class="fas fa-file-export"></i> Export Database
+                                    <p style="margin-bottom: 15px; color: #64748b;">
+                                        Configure connection to your centralized MySQL server for multi-user access.
+                                    </p>
+                                    <form id="db-config-form">
+                                        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="db-host" class="required">Server Host / IP</label>
+                                                <input type="text" class="form-control" id="db-host" placeholder="localhost or 192.168.x.x" required>
+                                            </div>
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="db-port" class="required">Port</label>
+                                                <input type="number" class="form-control" id="db-port" value="3306" required>
+                                            </div>
+                                        </div>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="db-user" class="required">Username</label>
+                                                <input type="text" class="form-control" id="db-user" placeholder="root" required>
+                                            </div>
+                                            <div class="form-group" style="margin-bottom: 0;">
+                                                <label for="db-password">Password</label>
+                                                <div style="position: relative;">
+                                                    <input type="password" class="form-control" id="db-password" placeholder="Database password" style="padding-right: 40px;">
+                                                    <span class="password-toggle" data-target="db-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8;">
+                                                        <i class="fas fa-eye"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 15px;">
+                                            <label for="db-name" class="required">Database Name</label>
+                                            <input type="text" class="form-control" id="db-name" placeholder="fridge_agency" required>
+                                        </div>
+                                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                            <button type="button" class="btn btn-outline" id="test-db-btn" style="border: 1px solid #cbd5e1;">
+                                                <i class="fas fa-plug"></i> Test Connection
+                                            </button>
+                                            <button type="submit" class="btn btn-primary" id="save-db-btn">
+                                                <i class="fas fa-save"></i> Save & Connect
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Google Drive & Cloud Backup Section -->
+                            <div class="card" style="box-shadow: none; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+                                <div class="card-header" style="background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+                                    <h3><i class="fab fa-google-drive" style="color: #0f9d58;"></i> Google Drive & Cloud Backups</h3>
+                                    <span class="badge" style="background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem;">
+                                        <i class="fas fa-cloud-upload-alt"></i> Auto-Sync Enabled
+                                    </span>
+                                </div>
+                                <div class="p-2">
+                                    <p style="margin-bottom: 15px; color: #64748b;">
+                                        Automatically backup database snapshots to your <strong>Google Drive</strong>, <strong>OneDrive</strong>, or local backup directory.
+                                    </p>
+
+                                    <!-- Backup Directory Picker -->
+                                    <div class="form-group" style="margin-bottom: 15px;">
+                                        <label for="backup-folder-path" style="display: flex; justify-content: space-between;">
+                                            <span><strong>Backup Destination Folder</strong> (Point to your Google Drive folder)</span>
+                                            <span id="backup-folder-status" style="color: #10b981; font-weight: normal; font-size: 0.85rem;"></span>
+                                        </label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <input type="text" class="form-control" id="backup-folder-path" placeholder="Paste or enter folder path (e.g. G:\My Drive\ESMS_Backups)" style="flex: 1;">
+                                            <button type="button" class="btn btn-primary" id="save-backup-folder-btn" style="white-space: nowrap; background: #0284c7; border-color: #0284c7;">
+                                                <i class="fas fa-save"></i> Save Path
+                                            </button>
+                                            <button type="button" class="btn btn-outline" id="browse-backup-folder-btn" style="border: 1px solid #cbd5e1; white-space: nowrap;">
+                                                <i class="fas fa-folder-open"></i> Browse...
+                                            </button>
+                                        </div>
+                                        <small style="color: #64748b; margin-top: 4px; display: block;">
+                                            <i class="fas fa-info-circle"></i> You can paste any path directly (e.g. <code>G:\My Drive\ESMS</code>) and click <strong>Save Path</strong>, or click <strong>Browse...</strong>
+                                        </small>
+                                    </div>
+
+                                    <!-- Auto-Backup Settings -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; align-items: center; background: #f8fafc; padding: 12px 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <input type="checkbox" id="auto-backup-toggle" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                            <label for="auto-backup-toggle" style="margin-bottom: 0; cursor: pointer; font-weight: 500;">
+                                                Automatic Daily Backups
+                                            </label>
+                                        </div>
+                                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+                                            <label for="backup-retention-count" style="margin-bottom: 0; font-size: 0.85rem; color: #64748b;">Keep Last:</label>
+                                            <input type="number" id="backup-retention-count" value="30" min="5" max="365" style="width: 70px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center;">
+                                            <span style="font-size: 0.85rem; color: #64748b;">Days</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                                        <button class="btn btn-primary" id="backup-now-btn" style="flex: 1.5; min-width: 180px; background: #059669; border-color: #059669;">
+                                            <i class="fas fa-cloud-upload-alt"></i> Backup Now to Drive
                                         </button>
-                                        <button class="btn btn-warning" id="import-db-btn" style="flex: 1;">
-                                            <i class="fas fa-file-import"></i> Import Database
+                                        <button class="btn btn-outline" id="export-db-btn" style="flex: 1; min-width: 140px; border: 1px solid #cbd5e1;">
+                                            <i class="fas fa-file-export"></i> Export File (JSON)
+                                        </button>
+                                        <button class="btn btn-outline" id="import-db-btn" style="flex: 1; min-width: 140px; border: 1px solid #cbd5e1;">
+                                            <i class="fas fa-file-import"></i> Import File
+                                        </button>
+                                        <button class="btn btn-outline" id="migrate-sqlite-btn" style="flex: 1; min-width: 160px; border: 1px solid #cbd5e1;">
+                                            <i class="fas fa-sync-alt"></i> Migrate SQLite (.db)
                                         </button>
                                     </div>
-                                    <div class="alert alert-warning" style="font-size: 0.85rem; margin-top: 10px;">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                        <strong>Warning:</strong> Importing will overwrite all current data and restart
-                                        the app.
+
+                                    <!-- Recent Backups List -->
+                                    <div style="margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                            <h4 style="font-size: 0.95rem; margin: 0; color: #334155;"><i class="fas fa-history"></i> Recent Cloud / Local Backups</h4>
+                                            <button type="button" class="btn btn-sm btn-link" id="refresh-backups-btn" style="padding: 0; color: #0284c7; text-decoration: none; font-size: 0.85rem;">
+                                                <i class="fas fa-sync-alt"></i> Refresh List
+                                            </button>
+                                        </div>
+                                        <div id="recent-backups-container" style="max-height: 180px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff;">
+                                            <div id="recent-backups-loading" style="padding: 15px; text-align: center; color: #94a3b8; font-size: 0.9rem;">
+                                                Loading backups list...
+                                            </div>
+                                            <table class="table" id="recent-backups-table" style="margin-bottom: 0; font-size: 0.85rem; display: none;">
+                                                <thead style="background: #f8fafc;">
+                                                    <tr>
+                                                        <th>File Name</th>
+                                                        <th>Date Created</th>
+                                                        <th>Size</th>
+                                                        <th style="text-align: right;">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="recent-backups-tbody"></tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

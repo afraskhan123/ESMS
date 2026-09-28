@@ -5,194 +5,155 @@ function registerAuthHandlers(context) {
     const { ipcMain, dbModule, getCurrentUser, setCurrentUser } = context;
 
     ipcMain.handle('login', async (event, { username, password }) => {
-        return new Promise((resolve, reject) => {
-            const hashedPassword = dbModule.hashPassword(password);
-            dbModule.db.get('SELECT * FROM admin WHERE username = ? AND password = ?',
-                [username, hashedPassword],
-                (err, row) => {
-                    if (err) {
-                        reject({ success: false, message: err.message });
-                    } else if (row) {
-                        dbModule.logActivity(username, 'Login', 'User successfully logged in.');
-                        setCurrentUser({ id: row.admin_id, username: row.username });
-                        let pImage = row.profile_image;
-                        if (pImage && fs.existsSync(pImage)) {
-                            try {
-                                const ext = path.extname(pImage).slice(1);
-                                const b64 = fs.readFileSync(pImage).toString('base64');
-                                pImage = `data:image/${ext};base64,${b64}`;
-                            } catch (e) { }
-                        }
-                        resolve({ success: true, admin: { id: row.admin_id, username: row.username, profile_image: pImage } });
-                    } else {
-                        dbModule.logActivity(username, 'Login Failed', 'Invalid username or password attempt.');
-                        resolve({ success: false, message: 'Invalid username or password' });
-                    }
-                }
+        try {
+            const cleanUsername = (username || '').trim();
+            const cleanPassword = (password || '').trim();
+            const hashedPassword = dbModule.hashPassword(cleanPassword);
+            const row = await dbModule.dbGet(
+                'SELECT * FROM admin WHERE LOWER(TRIM(username)) = LOWER(?) AND password = ?',
+                [cleanUsername, hashedPassword]
             );
-        });
+
+            if (row) {
+                await dbModule.logActivity(row.username, 'Login', 'User successfully logged in.');
+                setCurrentUser({ id: row.admin_id, username: row.username });
+
+                let pImage = row.profile_image;
+                if (pImage && !pImage.startsWith('data:image/') && fs.existsSync(pImage)) {
+                    try {
+                        const ext = path.extname(pImage).slice(1);
+                        const b64 = fs.readFileSync(pImage).toString('base64');
+                        pImage = `data:image/${ext};base64,${b64}`;
+                    } catch (e) { }
+                }
+
+                return {
+                    success: true,
+                    admin: { id: row.admin_id, username: row.username, profile_image: pImage }
+                };
+            } else {
+                await dbModule.logActivity(cleanUsername || 'unknown', 'Login Failed', 'Invalid username or password attempt.');
+                return { success: false, message: 'Invalid username or password' };
+            }
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('change-password', async (event, { username, oldPassword, newPassword }) => {
-        return new Promise((resolve, reject) => {
+        try {
             const hashedOldPassword = dbModule.hashPassword(oldPassword);
             const hashedNewPassword = dbModule.hashPassword(newPassword);
 
-            dbModule.db.get('SELECT * FROM admin WHERE username = ? AND password = ?',
-                [username, hashedOldPassword],
-                (err, row) => {
-                    if (err) {
-                        reject({ success: false, message: err.message });
-                    } else if (row) {
-                        dbModule.db.run('UPDATE admin SET password = ? WHERE username = ?',
-                            [hashedNewPassword, username],
-                            (err) => {
-                                if (err) {
-                                    reject({ success: false, message: err.message });
-                                } else {
-                                    resolve({ success: true, message: 'Password changed successfully' });
-                                }
-                            }
-                        );
-                    } else {
-                        resolve({ success: false, message: 'Current password is incorrect' });
-                    }
-                }
+            const row = await dbModule.dbGet(
+                'SELECT * FROM admin WHERE username = ? AND password = ?',
+                [username, hashedOldPassword]
             );
-        });
+
+            if (row) {
+                await dbModule.dbRun(
+                    'UPDATE admin SET password = ? WHERE username = ?',
+                    [hashedNewPassword, username]
+                );
+                await dbModule.logActivity(username, 'Password Change', 'Password updated successfully.');
+                return { success: true, message: 'Password changed successfully' };
+            } else {
+                return { success: false, message: 'Current password is incorrect' };
+            }
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('recover-password', async (event, data) => {
-        return new Promise((resolve, reject) => {
+        try {
             const { code, newPassword } = data;
             const hashedCode = dbModule.hashPassword(code);
             const hashedPassword = dbModule.hashPassword(newPassword);
 
-            dbModule.db.get('SELECT * FROM admin WHERE recovery_code = ?', [hashedCode], (err, row) => {
-                if (err) {
-                    resolve({ success: false, message: err.message });
-                } else if (!row) {
-                    resolve({ success: false, message: 'Invalid recovery code' });
-                } else {
-                    dbModule.db.run('UPDATE admin SET password = ? WHERE admin_id = ?', [hashedPassword, row.admin_id], (err) => {
-                        if (err) {
-                            resolve({ success: false, message: err.message });
-                        } else {
-                            resolve({ success: true, message: 'Password reset successfully' });
-                        }
-                    });
-                }
-            });
-        });
+            const row = await dbModule.dbGet('SELECT * FROM admin WHERE recovery_code = ?', [hashedCode]);
+            if (!row) {
+                return { success: false, message: 'Invalid recovery code' };
+            }
+
+            await dbModule.dbRun('UPDATE admin SET password = ? WHERE admin_id = ?', [hashedPassword, row.admin_id]);
+            await dbModule.logActivity(row.username, 'Password Recovered', 'Password reset using recovery code.');
+            return { success: true, message: 'Password reset successfully' };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('update-recovery-code', async (event, data) => {
-        return new Promise((resolve, reject) => {
+        try {
             const { username, currentPassword, newCode } = data;
             const hashedPassword = dbModule.hashPassword(currentPassword);
             const hashCode = dbModule.hashPassword(newCode);
 
-            // Verify current password first
-            dbModule.db.get('SELECT * FROM admin WHERE username = ? AND password = ?', [username, hashedPassword], (err, row) => {
-                if (err) {
-                    resolve({ success: false, message: err.message });
-                } else if (!row) {
-                    resolve({ success: false, message: 'Incorrect current password' });
-                } else {
-                    dbModule.db.run('UPDATE admin SET recovery_code = ? WHERE username = ?', [hashCode, username], (err) => {
-                        if (err) {
-                            resolve({ success: false, message: err.message });
-                        } else {
-                            resolve({ success: true, message: 'Recovery code updated successfully' });
-                        }
-                    });
-                }
-            });
-        });
+            const row = await dbModule.dbGet(
+                'SELECT * FROM admin WHERE username = ? AND password = ?',
+                [username, hashedPassword]
+            );
+
+            if (!row) {
+                return { success: false, message: 'Incorrect current password' };
+            }
+
+            await dbModule.dbRun('UPDATE admin SET recovery_code = ? WHERE username = ?', [hashCode, username]);
+            await dbModule.logActivity(username, 'Update Recovery Code', 'Recovery code updated.');
+            return { success: true, message: 'Recovery code updated successfully' };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 
     ipcMain.handle('update-profile', async (event, data) => {
-        const { app } = context;
-        return new Promise(async (resolve, reject) => {
+        try {
             const { username, newUsername, imagePath } = data;
-            let finalImagePath = null;
+            let finalImage = imagePath || null;
 
-            // 1. Check if new username is taken (if changed)
+            // 1. Check if new username is taken
             if (newUsername !== username) {
-                const checkQuery = 'SELECT * FROM admin WHERE username = ?';
-                const existingUser = await new Promise((res) => {
-                    dbModule.db.get(checkQuery, [newUsername], (err, row) => res(row));
-                });
-
+                const existingUser = await dbModule.dbGet('SELECT * FROM admin WHERE username = ?', [newUsername]);
                 if (existingUser) {
-                    return reject({ success: false, message: 'Username already taken' });
+                    return { success: false, message: 'Username already taken' };
                 }
             }
 
-            // 2. Handle Image Upload
-            if (imagePath) {
+            // 2. If image is local file path, convert to base64 for network database persistence
+            if (imagePath && !imagePath.startsWith('data:image/') && fs.existsSync(imagePath)) {
                 try {
-                    const userDataPath = app.getPath('userData');
-                    const profilesDir = path.join(userDataPath, 'profiles');
-                    if (!fs.existsSync(profilesDir)) {
-                        fs.mkdirSync(profilesDir, { recursive: true });
-                    }
-
-                    if (imagePath.startsWith('data:image/')) {
-                        const matches = imagePath.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
-                        if (matches && matches.length === 3) {
-                            const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-                            const fileName = `profile_${new Date().getTime()}.${ext}`;
-                            finalImagePath = path.join(profilesDir, fileName);
-                            const buffer = Buffer.from(matches[2], 'base64');
-                            fs.writeFileSync(finalImagePath, buffer);
-                        }
-                    } else if (imagePath && typeof imagePath === 'string' && fs.existsSync(imagePath)) {
-                        const ext = path.extname(imagePath);
-                        const fileName = `profile_${new Date().getTime()}${ext}`;
-                        finalImagePath = path.join(profilesDir, fileName);
-                        await fs.promises.copyFile(imagePath, finalImagePath);
-                    } else {
-                        console.error('Invalid imagePath provided');
-                    }
-                } catch (error) {
-                    console.error('Error saving profile image:', error);
-                    return reject({ success: false, message: 'Failed to save profile image' });
+                    const ext = path.extname(imagePath).slice(1) || 'png';
+                    const b64 = fs.readFileSync(imagePath).toString('base64');
+                    finalImage = `data:image/${ext};base64,${b64}`;
+                } catch (e) {
+                    console.error('Error reading local profile image:', e);
                 }
             }
 
-            // 3. Update Database
+            // 3. Update in Database
             let updateQuery = 'UPDATE admin SET username = ?';
-            let params = [newUsername];
+            const params = [newUsername];
 
-            if (finalImagePath) {
+            if (finalImage) {
                 updateQuery += ', profile_image = ?';
-                params.push(finalImagePath);
+                params.push(finalImage);
             }
 
             updateQuery += ' WHERE username = ?';
             params.push(username);
 
-            dbModule.db.run(updateQuery, params, function (err) {
-                if (err) {
-                    reject({ success: false, message: err.message });
-                } else {
-                    let pImage = finalImagePath;
-                    if (pImage && fs.existsSync(pImage)) {
-                        try {
-                            const ext = path.extname(pImage).slice(1);
-                            const b64 = fs.readFileSync(pImage).toString('base64');
-                            pImage = `data:image/${ext};base64,${b64}`;
-                        } catch (e) { }
-                    }
-                    resolve({
-                        success: true,
-                        message: 'Profile updated successfully',
-                        user: { username: newUsername, profile_image: pImage }
-                    });
-                }
-            });
-        });
+            await dbModule.dbRun(updateQuery, params);
+            await dbModule.logActivity(newUsername, 'Update Profile', `Profile updated for user: ${newUsername}`);
+
+            return {
+                success: true,
+                message: 'Profile updated successfully',
+                user: { username: newUsername, profile_image: finalImage }
+            };
+        } catch (err) {
+            return { success: false, message: err.message };
+        }
     });
 }
 

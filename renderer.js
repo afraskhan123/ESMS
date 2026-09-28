@@ -131,8 +131,8 @@ window.confirmPrint = function () {
 document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
     const errorDiv = document.getElementById('login-error');
 
     try {
@@ -257,7 +257,8 @@ document.querySelectorAll('.nav-item').forEach(item => {
                 if (salesTabBtn) salesTabBtn.click();
                 break;
             case 'settings':
-                // No specific data to load for settings yet
+                loadDbConfig();
+                if (typeof loadBackupSettings === 'function') loadBackupSettings();
                 break;
         }
     });
@@ -4849,12 +4850,388 @@ document.querySelectorAll('.password-toggle').forEach(toggle => {
     });
 });
 
-// Database Export
-document.getElementById('export-db-btn').addEventListener('click', async () => {
+// Database Configuration Management
+async function loadDbConfig() {
+    try {
+        if (!window.api || !window.api.getDbConfig) return;
+        const res = await window.api.getDbConfig();
+        if (res && res.success && res.config) {
+            const hostInput = document.getElementById('db-host');
+            const portInput = document.getElementById('db-port');
+            const userInput = document.getElementById('db-user');
+            const passInput = document.getElementById('db-password');
+            const nameInput = document.getElementById('db-name');
+
+            if (hostInput) hostInput.value = res.config.host || 'localhost';
+            if (portInput) portInput.value = res.config.port || 3306;
+            if (userInput) userInput.value = res.config.user || 'root';
+            if (passInput) passInput.value = res.config.password || '';
+            if (nameInput) nameInput.value = res.config.database || 'fridge_agency';
+        }
+    } catch (e) {
+        console.error('Failed to load DB config:', e);
+    }
+}
+
+// Load DB config on initialization
+loadDbConfig();
+
+// Test MySQL Connection Button
+const testDbBtn = document.getElementById('test-db-btn');
+if (testDbBtn) {
+    testDbBtn.addEventListener('click', async () => {
+        const host = document.getElementById('db-host')?.value?.trim();
+        const port = document.getElementById('db-port')?.value?.trim();
+        const user = document.getElementById('db-user')?.value?.trim();
+        const password = document.getElementById('db-password')?.value;
+        const database = document.getElementById('db-name')?.value?.trim();
+
+        if (!host || !user || !database) {
+            showNotification('error', 'Please fill in Host, User, and Database Name');
+            return;
+        }
+
+        testDbBtn.disabled = true;
+        testDbBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+
+        try {
+            const res = await window.api.testDbConnection({ host, port, user, password, database });
+            if (res && res.success) {
+                showNotification('success', 'MySQL Connection Successful!');
+            } else {
+                showNotification('error', 'Connection Failed: ' + (res?.message || 'Unknown error'));
+            }
+        } catch (err) {
+            showNotification('error', 'Connection Error: ' + err.message);
+        } finally {
+            testDbBtn.disabled = false;
+            testDbBtn.innerHTML = '<i class="fas fa-plug"></i> Test Connection';
+        }
+    });
+}
+
+// Save MySQL Configuration
+const dbConfigForm = document.getElementById('db-config-form');
+if (dbConfigForm) {
+    dbConfigForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const host = document.getElementById('db-host')?.value?.trim();
+        const port = document.getElementById('db-port')?.value?.trim();
+        const user = document.getElementById('db-user')?.value?.trim();
+        const password = document.getElementById('db-password')?.value;
+        const database = document.getElementById('db-name')?.value?.trim();
+
+        const saveBtn = document.getElementById('save-db-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+
+        try {
+            const res = await window.api.saveDbConfig({ host, port, user, password, database });
+            if (res && res.success) {
+                showNotification('success', res.message || 'Database settings saved and connected!');
+                if (typeof loadDashboard === 'function') loadDashboard();
+            } else {
+                showNotification('error', 'Save Error: ' + (res?.message || 'Failed to save'));
+            }
+        } catch (err) {
+            showNotification('error', 'Error: ' + err.message);
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save & Connect';
+            }
+        }
+    });
+}
+
+// Migrate from SQLite Button
+const migrateSqliteBtn = document.getElementById('migrate-sqlite-btn');
+if (migrateSqliteBtn) {
+    migrateSqliteBtn.addEventListener('click', async () => {
+        const isConfirmed = await appConfirm(
+            'This will read records from your selected SQLite .db file and insert/merge them into your active MySQL database. Continue?',
+            'Migrate SQLite Database?'
+        );
+        if (isConfirmed) {
+            migrateSqliteBtn.disabled = true;
+            migrateSqliteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Migrating...';
+            try {
+                const result = await window.api.migrateSqliteFile();
+                if (result && result.success) {
+                    showNotification('success', result.message || 'Migration completed successfully!');
+                    if (typeof loadDashboard === 'function') loadDashboard();
+                } else if (result && result.message !== 'Migration cancelled') {
+                    showNotification('error', 'Migration Failed: ' + result.message);
+                }
+            } catch (err) {
+                showNotification('error', 'Migration Error: ' + err.message);
+            } finally {
+                migrateSqliteBtn.disabled = false;
+                migrateSqliteBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Migrate from SQLite (.db)';
+            }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE DRIVE & CLOUD BACKUP MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+async function loadBackupSettings() {
+    try {
+        if (!window.api || !window.api.getBackupSettings) return;
+        const res = await window.api.getBackupSettings();
+        if (res && res.success && res.settings) {
+            const folderInput = document.getElementById('backup-folder-path');
+            const toggleInput = document.getElementById('auto-backup-toggle');
+            const retentionInput = document.getElementById('backup-retention-count');
+            const statusLabel = document.getElementById('backup-folder-status');
+
+            if (folderInput) folderInput.value = res.settings.backupFolder || '';
+            if (toggleInput) toggleInput.checked = res.settings.autoBackupEnabled !== false;
+            if (retentionInput) retentionInput.value = res.settings.maxBackupsToKeep || 30;
+
+            if (statusLabel) {
+                if (res.settings.lastBackupPakistanTime) {
+                    statusLabel.textContent = `Last: ${res.settings.lastBackupPakistanTime}`;
+                } else if (res.settings.lastBackupDate) {
+                    const dt = new Date(res.settings.lastBackupDate);
+                    const pktStr = dt.toLocaleString('en-PK', {
+                        timeZone: 'Asia/Karachi',
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) + ' (PKT)';
+                    statusLabel.textContent = `Last: ${pktStr}`;
+                }
+            }
+        }
+        await renderRecentBackups();
+    } catch (e) {
+        console.error('Failed to load backup settings:', e);
+    }
+}
+
+// Render Recent Backups list in Pakistani Timezone
+async function renderRecentBackups() {
+    const loadingEl = document.getElementById('recent-backups-loading');
+    const tableEl = document.getElementById('recent-backups-table');
+    const tbody = document.getElementById('recent-backups-tbody');
+
+    if (!tbody) return;
+
+    try {
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (tableEl) tableEl.style.display = 'none';
+
+        const res = await window.api.listBackups();
+        if (res && res.success && res.backups && res.backups.length > 0) {
+            tbody.innerHTML = res.backups.map(b => {
+                const dateStr = b.readablePakistanTime || (new Date(b.mtime).toLocaleString('en-PK', {
+                    timeZone: 'Asia/Karachi',
+                    year: 'numeric',
+                    month: 'short',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                }) + ' (PKT)');
+
+                return `
+                    <tr>
+                        <td style="font-weight: 500; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${b.name}">
+                            <i class="fas fa-file-code" style="color: #0284c7; margin-right: 6px;"></i>${b.name}
+                        </td>
+                        <td style="white-space: nowrap;"><i class="far fa-clock" style="color: #059669; margin-right: 4px;"></i>${dateStr}</td>
+                        <td><span class="badge" style="background: #f1f5f9; color: #475569; font-size: 0.75rem;">${b.formattedSize}</span></td>
+                        <td style="text-align: right;">
+                            <button type="button" class="btn btn-sm btn-outline restore-backup-btn" data-path="${encodeURIComponent(b.path)}" data-name="${b.name}" style="padding: 2px 8px; font-size: 0.75rem; border: 1px solid #cbd5e1;">
+                                <i class="fas fa-undo"></i> Restore
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Attach restore listeners
+            tbody.querySelectorAll('.restore-backup-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const rawPath = decodeURIComponent(btn.dataset.path);
+                    const fileName = btn.dataset.name;
+                    const isConfirmed = await appConfirm(
+                        `Are you sure you want to restore database records from ${fileName}? Current data will be merged/updated.`,
+                        'Restore Database Backup?'
+                    );
+                    if (isConfirmed) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring...';
+                        try {
+                            const restRes = await window.api.restoreBackupFile(rawPath);
+                            if (restRes && restRes.success) {
+                                showNotification('success', restRes.message || 'Database restored successfully!');
+                                if (typeof loadDashboard === 'function') loadDashboard();
+                            } else {
+                                showNotification('error', 'Restore failed: ' + (restRes?.message || 'Unknown error'));
+                            }
+                        } catch (err) {
+                            showNotification('error', 'Restore error: ' + err.message);
+                        } finally {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="fas fa-undo"></i> Restore';
+                        }
+                    }
+                });
+            });
+
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (tableEl) tableEl.style.display = 'table';
+        } else {
+            if (loadingEl) {
+                loadingEl.textContent = 'No backups found in the selected folder yet. Click "Backup Now to Drive" above to create one.';
+                loadingEl.style.display = 'block';
+            }
+            if (tableEl) tableEl.style.display = 'none';
+        }
+    } catch (e) {
+        console.error('Error rendering recent backups:', e);
+        if (loadingEl) {
+            loadingEl.textContent = 'Could not load backups list: ' + e.message;
+            loadingEl.style.display = 'block';
+        }
+    }
+}
+
+// Save Backup Destination Folder (Supports Direct Pasting and Typing)
+const saveFolderBtn = document.getElementById('save-backup-folder-btn');
+const backupFolderInput = document.getElementById('backup-folder-path');
+
+async function saveBackupFolderFromInput() {
+    if (!backupFolderInput) return;
+    let folderPath = backupFolderInput.value.trim().replace(/^["']|["']$/g, '');
+    if (!folderPath) {
+        showNotification('error', 'Please enter or paste a valid folder path');
+        return;
+    }
+
+    try {
+        if (saveFolderBtn) {
+            saveFolderBtn.disabled = true;
+            saveFolderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+        const res = await window.api.saveBackupSettings({ backupFolder: folderPath });
+        if (res && res.success) {
+            backupFolderInput.value = folderPath;
+            showNotification('success', `✓ Backup folder saved: ${folderPath}`);
+            await renderRecentBackups();
+        } else {
+            showNotification('error', 'Failed to save folder: ' + (res?.message || 'Unknown error'));
+        }
+    } catch (err) {
+        showNotification('error', 'Error saving folder: ' + err.message);
+    } finally {
+        if (saveFolderBtn) {
+            saveFolderBtn.disabled = false;
+            saveFolderBtn.innerHTML = '<i class="fas fa-save"></i> Save Path';
+        }
+    }
+}
+
+if (saveFolderBtn) {
+    saveFolderBtn.addEventListener('click', saveBackupFolderFromInput);
+}
+
+if (backupFolderInput) {
+    backupFolderInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveBackupFolderFromInput();
+        }
+    });
+}
+
+// Browse Backup Folder Button
+const browseFolderBtn = document.getElementById('browse-backup-folder-btn');
+if (browseFolderBtn) {
+    browseFolderBtn.addEventListener('click', async () => {
+        try {
+            const res = await window.api.selectBackupFolder();
+            if (res && res.success && res.folderPath) {
+                if (backupFolderInput) backupFolderInput.value = res.folderPath;
+                showNotification('success', 'Backup folder updated: ' + res.folderPath);
+                await renderRecentBackups();
+            }
+        } catch (err) {
+            showNotification('error', 'Error selecting folder: ' + err.message);
+        }
+    });
+}
+
+// Auto-Backup Settings Changes
+const autoBackupToggle = document.getElementById('auto-backup-toggle');
+if (autoBackupToggle) {
+    autoBackupToggle.addEventListener('change', async () => {
+        try {
+            await window.api.saveBackupSettings({ autoBackupEnabled: autoBackupToggle.checked });
+            showNotification('info', `Automatic backups ${autoBackupToggle.checked ? 'enabled' : 'disabled'}`);
+        } catch (e) { }
+    });
+}
+
+const backupRetentionCount = document.getElementById('backup-retention-count');
+if (backupRetentionCount) {
+    backupRetentionCount.addEventListener('change', async () => {
+        const val = parseInt(backupRetentionCount.value, 10) || 30;
+        try {
+            await window.api.saveBackupSettings({ maxBackupsToKeep: val });
+            showNotification('info', `Backup retention set to ${val} days`);
+        } catch (e) { }
+    });
+}
+
+// Backup Now to Cloud / Drive Button
+const backupNowBtn = document.getElementById('backup-now-btn');
+if (backupNowBtn) {
+    backupNowBtn.addEventListener('click', async () => {
+        backupNowBtn.disabled = true;
+        backupNowBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backing up...';
+
+        try {
+            const res = await window.api.performBackup();
+            if (res && res.success) {
+                showNotification('success', `✓ Backup saved to: ${res.fileName}`);
+                await loadBackupSettings();
+            } else {
+                showNotification('error', 'Backup failed: ' + (res?.message || 'Unknown error'));
+            }
+        } catch (err) {
+            showNotification('error', 'Backup error: ' + err.message);
+        } finally {
+            backupNowBtn.disabled = false;
+            backupNowBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Backup Now to Drive';
+        }
+    });
+}
+
+// Refresh Backups List Button
+const refreshBackupsBtn = document.getElementById('refresh-backups-btn');
+if (refreshBackupsBtn) {
+    refreshBackupsBtn.addEventListener('click', () => {
+        renderRecentBackups();
+    });
+}
+
+// Manual Database Export File
+document.getElementById('export-db-btn')?.addEventListener('click', async () => {
     try {
         const result = await window.api.exportDatabase();
         if (result.success) {
             showNotification('success', result.message);
+            await renderRecentBackups();
         } else if (result.message !== 'Export cancelled') {
             showNotification('error', result.message);
         }
@@ -4863,16 +5240,18 @@ document.getElementById('export-db-btn').addEventListener('click', async () => {
     }
 });
 
-// Database Import
+// Manual Database Import File
 const importDbBtn = document.getElementById('import-db-btn');
 if (importDbBtn) {
     importDbBtn.addEventListener('click', async () => {
-        const isConfirmed = await appConfirm('WARNING: importing a database will OVERWRITE all current data. The application will restart after import. Are you sure you want to proceed?', 'DANGER: Overwrite Database?');
+        const isConfirmed = await appConfirm('Importing a database backup will merge/update current database records. Are you sure you want to proceed?', 'Import Database Backup?');
         if (isConfirmed) {
             try {
                 const result = await window.api.importDatabase();
                 if (result.success) {
                     showNotification('success', result.message);
+                    if (typeof loadDashboard === 'function') loadDashboard();
+                    await renderRecentBackups();
                 } else if (result.message !== 'Import cancelled') {
                     showNotification('error', result.message);
                 }
@@ -4882,6 +5261,9 @@ if (importDbBtn) {
         }
     });
 }
+
+// Load backup settings on app startup
+loadBackupSettings();
 
 // ═══════════════════════════════════════════════════════════
 // PROFILE MANAGEMENT

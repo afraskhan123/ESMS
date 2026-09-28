@@ -1,0 +1,338 @@
+{
+  "exportDateUtc": "2026-09-28T17:13:29.036Z",
+  "exportDatePakistan": "28-Sept-2026, 10:13:29 pm (PKT)",
+  "database": "fridge_agency",
+  "version": "2.0.0",
+  "data": {
+    "admin": [
+      {
+        "admin_id": 1,
+        "username": "admin",
+        "password": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+        "created_at": "2026-09-28 18:18:39",
+        "profile_image": null,
+        "recovery_code": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"
+      }
+    ],
+    "products": [
+      {
+        "product_id": 1,
+        "name": "Test Refrigerator 300L",
+        "category": "Refrigerators",
+        "brand": "Haier",
+        "purchase_price": "75000.00",
+        "selling_price": "95000.00",
+        "stock_qty": 9,
+        "min_stock_level": 2,
+        "supplier_name": "Haier Official",
+        "warranty_period": "10 Years",
+        "date_added": "2026-09-28 18:23:59",
+        "last_updated": "2026-09-28 18:23:59"
+      }
+    ],
+    "customers": [
+      {
+        "customer_id": 1,
+        "full_name": "Afras Khan",
+        "phone": "03001234567",
+        "address": "Gulberg, Lahore",
+        "id_number": "12345-1234567-1",
+        "email": "afras@example.com",
+        "image_path": "data:image/png;base64,iVBORw0KGgo=",
+        "date_added": "2026-09-28 18:23:59",
+        "is_deleted": 0
+      }
+    ],
+    "sales": [
+      {
+        "sale_id": 1,
+        "customer_id": 1,
+        "walkin_name": null,
+        "walkin_id": null,
+        "sale_date": "2026-09-28 18:23:59",
+        "total_amount": "95000.00",
+        "payment_type": "Cash",
+        "status": "Completed",
+        "is_hidden": 0,
+        "is_deleted": 0
+      },
+      {
+        "sale_id": 2,
+        "customer_id": 1,
+        "walkin_name": null,
+        "walkin_id": null,
+        "sale_date": "2026-09-28 18:23:59",
+        "total_amount": "100000.00",
+        "payment_type": "Installment",
+        "status": "Completed",
+        "is_hidden": 0,
+        "is_deleted": 0
+      }
+    ],
+    "sale_items": [
+      {
+        "sale_item_id": 1,
+        "sale_id": 1,
+        "product_id": null,
+        "product_name": "Test Refrigerator 300L",
+        "quantity": 1,
+        "unit_price": "95000.00",
+        "subtotal": "95000.00",
+        "purchase_price": "75000.00",
+        "returned_qty": 0
+      },
+      {
+        "sale_item_id": 2,
+        "sale_id": 2,
+        "product_id": null,
+        "product_name": "Test Refrigerator 300L",
+        "quantity": 1,
+        "unit_price": "100000.00",
+        "subtotal": "100000.00",
+        "purchase_price": "75000.00",
+        "returned_qty": 0
+      }
+    ],
+    "installments": [
+      {
+        "installment_id": 1,
+        "sale_id": 2,
+        "down_payment": "20000.00",
+        "total_amount": "100000.00",
+        "remaining_balance": "70000.00",
+        "monthly_amount": "10000.00",
+        "installment_duration": 8,
+        "next_due_date": "2026-09-28",
+        "status": "Active",
+        "created_at": "2026-09-28 18:23:59",
+        "guarantor_name": "Ali Khan",
+        "guarantor_cnic": "12345-7654321-1",
+        "guarantor_mobile": null,
+        "guarantor_address": null,
+        "is_deleted": 0
+      }
+    ],
+    "installment_payments": [
+      {
+        "payment_id": 1,
+        "installment_id": 1,
+        "payment_date": "2026-09-28 18:23:59",
+        "amount_paid": "10000.00",
+        "payment_method": "Cash",
+        "remaining_balance_after": "70000.00"
+      }
+    ],
+    "activity_logs": [
+      {
+        "log_id": 1,
+        "username": "admin",
+        "action": "Test Action",
+        "details": "Test activity logging details",
+        "timestamp": "2026-09-28 18:23:59"
+      },
+      {
+        "log_id": 2,
+        "username": "admin",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 19:32:34"
+      },
+      {
+        "log_id": 3,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 19:32:41"
+      },
+      {
+        "log_id": 4,
+        "username": "admin",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 20:23:51"
+      },
+      {
+        "log_id": 5,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 20:23:53"
+      },
+      {
+        "log_id": 6,
+        "username": "admin",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 20:28:29"
+      },
+      {
+        "log_id": 7,
+        "username": "admin",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 20:28:32"
+      },
+      {
+        "log_id": 8,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 20:28:38"
+      },
+      {
+        "log_id": 9,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 21:10:41"
+      },
+      {
+        "log_id": 10,
+        "username": "admin",
+        "action": "Update Profile",
+        "details": "Profile updated for user: admin",
+        "timestamp": "2026-09-28 21:12:00"
+      },
+      {
+        "log_id": 11,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 21:34:44"
+      },
+      {
+        "log_id": 12,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 21:35:05"
+      },
+      {
+        "log_id": 13,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:45:52"
+      },
+      {
+        "log_id": 14,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:45:58"
+      },
+      {
+        "log_id": 15,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:45:59"
+      },
+      {
+        "log_id": 16,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:45:59"
+      },
+      {
+        "log_id": 17,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:45:59"
+      },
+      {
+        "log_id": 18,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:00"
+      },
+      {
+        "log_id": 19,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:00"
+      },
+      {
+        "log_id": 20,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:28"
+      },
+      {
+        "log_id": 21,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:29"
+      },
+      {
+        "log_id": 22,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:29"
+      },
+      {
+        "log_id": 23,
+        "username": "admin ",
+        "action": "Login Failed",
+        "details": "Invalid username or password attempt.",
+        "timestamp": "2026-09-28 21:46:29"
+      },
+      {
+        "log_id": 24,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 21:52:18"
+      },
+      {
+        "log_id": 25,
+        "username": "admin",
+        "action": "Delete Product",
+        "details": "Deleted product ID: 1",
+        "timestamp": "2026-09-28 21:53:14"
+      },
+      {
+        "log_id": 26,
+        "username": "admin",
+        "action": "Restore Backup",
+        "details": "Restored database from esms_backup_2026-09-28T16-45-30-668Z.json",
+        "timestamp": "2026-09-28 21:53:18"
+      },
+      {
+        "log_id": 27,
+        "username": "admin",
+        "action": "Cloud Backup",
+        "details": "Created backup: esms_backup_2026-09-28T16-54-27-706Z.json",
+        "timestamp": "2026-09-28 21:54:27"
+      },
+      {
+        "log_id": 28,
+        "username": "admin",
+        "action": "Cloud Backup",
+        "details": "Created backup: esms_backup_2026-09-28T17-00-02-740Z.json",
+        "timestamp": "2026-09-28 22:00:02"
+      },
+      {
+        "log_id": 29,
+        "username": "admin",
+        "action": "Login",
+        "details": "User successfully logged in.",
+        "timestamp": "2026-09-28 22:09:01"
+      },
+      {
+        "log_id": 30,
+        "username": "admin",
+        "action": "Cloud Backup",
+        "details": "Created backup: esms_backup_2026-09-28T17-10-06-110Z.json",
+        "timestamp": "2026-09-28 22:10:06"
+      }
+    ]
+  }
+}
